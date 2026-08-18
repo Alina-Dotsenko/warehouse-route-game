@@ -452,9 +452,11 @@ function renderGameScreen() {
           <div class="complaint-icon">❓</div>
           <div class="complaint-text">"${level.complaint}"</div>
       </div>
-      <div>
-        <button class="btn" id="btn-route-bad" style="background: var(--primary); margin-right: 10px;">Получившийся маршрут</button>
-        <button class="btn" id="btn-route-good" style="background: var(--surface-light);">Желаемый маршрут</button>
+      <div style="display: flex; align-items: center; gap: 1.5rem;">
+        <div class="route-tabs">
+          <button class="tab-btn active" id="btn-route-bad">Получившийся маршрут</button>
+          <button class="tab-btn" id="btn-route-good">Желаемый маршрут</button>
+        </div>
         <button class="btn" id="btn-verify" style="background: var(--secondary);">Проверить</button>
       </div>
     </div>
@@ -488,14 +490,19 @@ function renderGameScreen() {
     zoomDoubleClickSpeed: 1 // disable double click zoom to prevent interference
   });
 
-  const updateTabs = () => {
-      btnBad.style.background = window.activeRouteType === 'bad' ? 'var(--primary)' : 'var(--surface-light)';
-      btnGood.style.background = window.activeRouteType === 'good' ? 'var(--primary)' : 'var(--surface-light)';
+  btnBad.addEventListener('click', () => {
+      window.activeRouteType = 'bad';
+      btnBad.classList.add('active');
+      btnGood.classList.remove('active');
       gameArea.innerHTML = renderTopology(level);
-  };
-
-  btnBad.addEventListener('click', () => { window.activeRouteType = 'bad'; updateTabs(); });
-  btnGood.addEventListener('click', () => { window.activeRouteType = 'good'; updateTabs(); });
+  });
+  
+  btnGood.addEventListener('click', () => {
+      window.activeRouteType = 'good';
+      btnGood.classList.add('active');
+      btnBad.classList.remove('active');
+      gameArea.innerHTML = renderTopology(level);
+  });
 
   const handleCabClick = (cabEl) => {
     if (cabEl) {
