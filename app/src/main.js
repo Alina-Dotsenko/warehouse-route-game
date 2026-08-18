@@ -457,7 +457,6 @@ function renderGameScreen() {
           <button class="tab-btn active" id="btn-route-bad">Получившийся маршрут</button>
           <button class="tab-btn" id="btn-route-good">Желаемый маршрут</button>
         </div>
-        <button class="btn" id="btn-verify" style="background: var(--secondary);">Проверить</button>
       </div>
     </div>
     
@@ -465,6 +464,10 @@ function renderGameScreen() {
       <div class="game-area" id="game-area">
         ${renderTopology(level)}
       </div>
+    </div>
+
+    <div style="text-align: right; margin-top: 1.5rem; margin-bottom: 2rem;">
+      <button class="btn" id="btn-verify" style="background: var(--secondary); font-size: 1.1rem; padding: 0.8rem 2rem; box-shadow: 0 4px 15px rgba(16, 185, 129, 0.3);">Проверить решение</button>
     </div>
 
     <div class="modal-overlay" id="success-modal">
