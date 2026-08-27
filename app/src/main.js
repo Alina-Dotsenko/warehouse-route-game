@@ -472,6 +472,7 @@ function renderGameScreen() {
     <div class="game-area-wrapper">
       <div class="game-area" id="game-area">
         ${renderTopology(level)}
+        <img src="empty" onerror="window.drawCanvasMap(levels[currentLevelIndex]); window.updateSelectionLayer(levels[currentLevelIndex]); this.remove();" style="display:none;"/>
       </div>
     </div>
 
@@ -517,6 +518,8 @@ function renderGameScreen() {
     } else if (window.currentHintStep === 2) {
        btnHint.style.display = 'none';
        gameArea.innerHTML = renderTopology(level);
+       window.drawCanvasMap(level);
+       window.updateSelectionLayer(level);
     }
   });
 
