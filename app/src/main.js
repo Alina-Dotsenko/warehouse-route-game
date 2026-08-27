@@ -154,7 +154,7 @@ function renderTopology(level, isEditor = false) {
 
     html += `
       <svg class="route-svg" viewBox="0 0 100 100" preserveAspectRatio="none">
-        <path d="${pathD}" class="route-path" />
+        <path d="${pathD}" class="route-path" pathLength="100" />
         ${activeRoute.map(pt => `<circle cx="${pt.x}" cy="${pt.y}" r="0.2" class="route-dot" />`).join('')}
       </svg>
     `;
