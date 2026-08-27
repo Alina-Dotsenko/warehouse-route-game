@@ -154,6 +154,7 @@ function renderTopology(level, isEditor = false) {
 
     html += `
       <svg class="route-svg" viewBox="0 0 100 100" preserveAspectRatio="none">
+        ${(level.hintZone && window.currentHintStep >= 2) ? `<rect x="${level.hintZone.x}" y="${level.hintZone.y}" width="${level.hintZone.w}" height="${level.hintZone.h}" fill="rgba(255, 204, 0, 0.15)" stroke="#ffcc00" stroke-width="0.3" stroke-dasharray="0.5 0.5" rx="1" />` : ''}
         <path d="${pathD}" class="route-path" pathLength="100" />
         ${activeRoute.map(pt => `<circle cx="${pt.x}" cy="${pt.y}" r="0.2" class="route-dot" />`).join('')}
       </svg>
@@ -435,6 +436,7 @@ function renderGameScreen() {
   const level = levels[currentLevelIndex];
   window.selectedCabinets = new Set();
   window.activeRouteType = 'bad';
+  window.currentHintStep = 0;
   
   app.innerHTML = `
     <div class="header">
@@ -447,16 +449,22 @@ function renderGameScreen() {
       </div>
     </div>
     
-    <div class="complaint-card" style="display: flex; justify-content: space-between; align-items: center;">
-      <div style="display: flex; align-items: center;">
-          <div class="complaint-icon">❓</div>
-          <div class="complaint-text">"${level.complaint}"</div>
-      </div>
-      <div style="display: flex; align-items: center; gap: 1.5rem;">
-        <div class="route-tabs">
-          <button class="tab-btn active" id="btn-route-bad">Получившийся маршрут</button>
-          <button class="tab-btn" id="btn-route-good">Желаемый маршрут</button>
+    <div class="complaint-card" style="display: flex; flex-direction: column; gap: 1rem; align-items: stretch;">
+      <div style="display: flex; justify-content: space-between; align-items: center;">
+        <div style="display: flex; align-items: center;">
+            <div class="complaint-icon">❓</div>
+            <div class="complaint-text">"${level.complaint}"</div>
         </div>
+        <div style="display: flex; align-items: center; gap: 1.5rem;">
+          <button class="btn" id="btn-hint" style="background: rgba(255, 255, 255, 0.1); border: 1px solid rgba(255, 255, 255, 0.3);">💡 Подсказка</button>
+          <div class="route-tabs">
+            <button class="tab-btn active" id="btn-route-bad">Получившийся маршрут</button>
+            <button class="tab-btn" id="btn-route-good">Желаемый маршрут</button>
+          </div>
+        </div>
+      </div>
+      <div id="hint-text-container" style="display: none; padding: 10px 15px; background: rgba(255, 204, 0, 0.1); border-left: 3px solid #ffcc00; color: #ffcc00; border-radius: 4px; font-size: 0.95rem;">
+        ${level.hintText}
       </div>
     </div>
     
@@ -484,6 +492,32 @@ function renderGameScreen() {
   const btnBad = document.getElementById('btn-route-bad');
   const btnGood = document.getElementById('btn-route-good');
   const btnVerify = document.getElementById('btn-verify');
+
+  const btnHint = document.getElementById('btn-hint');
+  
+  if (window.currentHintStep === undefined) {
+      window.currentHintStep = 0;
+  }
+  
+  // Re-apply hint state if rendering again (e.g., when route tabs change)
+  if (window.currentHintStep >= 1) {
+      document.getElementById('hint-text-container').style.display = 'block';
+      btnHint.innerText = '💡 Подсветить зону';
+  }
+  if (window.currentHintStep >= 2) {
+      btnHint.style.display = 'none';
+  }
+
+  btnHint.addEventListener('click', () => {
+    window.currentHintStep++;
+    if (window.currentHintStep === 1) {
+       document.getElementById('hint-text-container').style.display = 'block';
+       btnHint.innerText = '💡 Подсветить зону';
+    } else if (window.currentHintStep === 2) {
+       btnHint.style.display = 'none';
+       gameArea.innerHTML = renderTopology(level);
+    }
+  });
 
   const pz = panzoom(gameArea, {
     maxZoom: 20,
