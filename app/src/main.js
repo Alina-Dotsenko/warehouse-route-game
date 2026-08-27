@@ -151,7 +151,6 @@ function renderTopology(level, isEditor = false) {
       <svg id="${id}" class="route-svg" viewBox="0 0 100 100" preserveAspectRatio="none" style="visibility: ${vis}; opacity: ${isVisible ? 1 : 0}; transition: opacity 0.3s ease, visibility 0.3s ease; pointer-events: none;">
         ${(level.hintZone && window.currentHintStep >= 2) ? `<rect x="${level.hintZone.x}" y="${level.hintZone.y}" width="${level.hintZone.w}" height="${level.hintZone.h}" fill="rgba(255, 204, 0, 0.15)" stroke="#ffcc00" stroke-width="0.3" stroke-dasharray="0.5 0.5" rx="1" />` : ''}
         <path d="${pathD}" class="route-path" pathLength="100" />
-        ${routeArr.map(pt => `<circle cx="${pt.x}" cy="${pt.y}" r="0.2" class="route-dot" />`).join('')}
       </svg>
     `;
   };
