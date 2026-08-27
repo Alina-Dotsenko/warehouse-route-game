@@ -546,10 +546,11 @@ function renderGameScreen() {
         const idx = parseInt(cabEl.dataset.idx, 10);
         if (window.selectedCabinets.has(idx)) {
             window.selectedCabinets.delete(idx);
+            cabEl.classList.remove('cab-pick');
         } else {
             window.selectedCabinets.add(idx);
+            cabEl.classList.add('cab-pick');
         }
-        gameArea.innerHTML = renderTopology(level);
     }
   };
 
