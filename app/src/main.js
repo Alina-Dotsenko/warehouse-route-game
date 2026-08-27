@@ -458,7 +458,7 @@ function renderGameScreen() {
             <div class="complaint-text">"${level.complaint}"</div>
         </div>
         <div style="display: flex; align-items: center; gap: 1.5rem;">
-          <button class="btn" id="btn-hint" style="background: rgba(255, 255, 255, 0.1); border: 1px solid rgba(255, 255, 255, 0.3);">💡 Подсказка</button>
+          <button class="tab-btn" id="btn-hint" style="color: #eab308; border-color: rgba(234, 179, 8, 0.3); background: rgba(234, 179, 8, 0.05);">💡 Подсказка</button>
           <div class="route-tabs">
             <button class="tab-btn active" id="btn-route-bad">Получившийся маршрут</button>
             <button class="tab-btn" id="btn-route-good">Желаемый маршрут</button>
