@@ -531,14 +531,20 @@ function renderGameScreen() {
       window.activeRouteType = 'bad';
       btnBad.classList.add('active');
       btnGood.classList.remove('active');
-      gameArea.innerHTML = renderTopology(level);
+      const bad = document.getElementById('svg-route-bad');
+      const good = document.getElementById('svg-route-good');
+      if (bad) bad.style.opacity = '1';
+      if (good) good.style.opacity = '0';
   });
   
   btnGood.addEventListener('click', () => {
       window.activeRouteType = 'good';
       btnGood.classList.add('active');
       btnBad.classList.remove('active');
-      gameArea.innerHTML = renderTopology(level);
+      const bad = document.getElementById('svg-route-bad');
+      const good = document.getElementById('svg-route-good');
+      if (bad) bad.style.opacity = '0';
+      if (good) good.style.opacity = '1';
   });
 
   const handleCabClick = (cabEl) => {
