@@ -95,10 +95,8 @@ function renderTopology(level, isEditor = false) {
     html += `<div class="${cls}" style="left: ${obs.x}%; top: ${obs.y}%; width: ${obs.w}%; height: ${obs.h}%;"></div>`;
   });
 
-  let activeRoute = level.topology.route;
-  if (!isEditor && window.activeRouteType) {
-      activeRoute = window.activeRouteType === 'good' ? level.goodRoute : level.badRoute;
-  }
+  
+  
 
   level.topology.cabinets.forEach((cab, idx) => {
     let facingClass = cab.facing ? `facing-${cab.facing}` : 'facing-bottom';
@@ -124,41 +122,44 @@ function renderTopology(level, isEditor = false) {
     html += `<div class="cabinet ${facingClass}${extraClass}" data-idx="${idx}" style="left: ${cab.x}%; top: ${cab.y}%; width: ${cab.w}%; height: ${cab.h}%;"></div>`;
   });
 
-  if (activeRoute && activeRoute.length > 0) {
+  const generateSvg = (routeArr, id, isVisible) => {
+    if (!routeArr || routeArr.length === 0) return '';
     let pathD = '';
-    activeRoute.forEach((pt, idx) => {
+    routeArr.forEach((pt, idx) => {
       if (idx === 0) {
         pathD += `M ${pt.x} ${pt.y} `;
       } else {
-        let prev = activeRoute[idx - 1];
+        let prev = routeArr[idx - 1];
         let dx = pt.x - prev.x;
         let dy = pt.y - prev.y;
-        
-        // Если линия уже горизонтальная, вертикальная или строго диагональная (45 град)
         if (Math.abs(dx) < 0.001 || Math.abs(dy) < 0.001 || Math.abs(Math.abs(dx) - Math.abs(dy)) < 0.001) {
             pathD += `L ${pt.x} ${pt.y} `;
         } else {
-            // Добавляем промежуточную точку (излом), чтобы все линии были под углом кратным 45 градусам
             if (Math.abs(dx) > Math.abs(dy)) {
                 let ix = prev.x + Math.sign(dx) * (Math.abs(dx) - Math.abs(dy));
-                let iy = prev.y;
-                pathD += `L ${ix} ${iy} L ${pt.x} ${pt.y} `;
+                pathD += `L ${ix} ${prev.y} L ${pt.x} ${pt.y} `;
             } else {
-                let ix = prev.x;
                 let iy = prev.y + Math.sign(dy) * (Math.abs(dy) - Math.abs(dx));
-                pathD += `L ${ix} ${iy} L ${pt.x} ${pt.y} `;
+                pathD += `L ${prev.x} ${iy} L ${pt.x} ${pt.y} `;
             }
         }
       }
     });
-
-    html += `
-      <svg class="route-svg" viewBox="0 0 100 100" preserveAspectRatio="none">
+    const opacity = isVisible ? '1' : '0';
+    return `
+      <svg id="${id}" class="route-svg" viewBox="0 0 100 100" preserveAspectRatio="none" style="opacity: ${opacity}; transition: opacity 0.3s ease; pointer-events: none;">
         ${(level.hintZone && window.currentHintStep >= 2) ? `<rect x="${level.hintZone.x}" y="${level.hintZone.y}" width="${level.hintZone.w}" height="${level.hintZone.h}" fill="rgba(255, 204, 0, 0.15)" stroke="#ffcc00" stroke-width="0.3" stroke-dasharray="0.5 0.5" rx="1" />` : ''}
         <path d="${pathD}" class="route-path" pathLength="100" />
-        ${activeRoute.map(pt => `<circle cx="${pt.x}" cy="${pt.y}" r="0.2" class="route-dot" />`).join('')}
+        ${routeArr.map(pt => `<circle cx="${pt.x}" cy="${pt.y}" r="0.2" class="route-dot" />`).join('')}
       </svg>
     `;
+  };
+
+  if (!isEditor && level.badRoute && level.goodRoute) {
+     html += generateSvg(level.badRoute, 'svg-route-bad', window.activeRouteType === 'bad');
+     html += generateSvg(level.goodRoute, 'svg-route-good', window.activeRouteType === 'good');
+  } else if (level.topology.route) {
+     html += generateSvg(level.topology.route, 'svg-route-editor', true);
   }
 
   return html;
