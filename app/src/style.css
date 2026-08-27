@@ -121,6 +121,8 @@ body {
   align-items: center;
   justify-content: center;
   cursor: grab;
+  will-change: transform;
+  transform: translateZ(0);
 }
 
 .game-area:active {
