@@ -103,7 +103,8 @@ function renderTopology(level, isEditor = false) {
     let extraClass = isEditor ? ' editor-cab' : '';
     
     let hasPickPoint = false;
-    let activeRoute = level.badRoute || level.topology.route;\n    if (activeRoute) {
+    let activeRoute = level.badRoute || level.topology.route;
+    if (activeRoute) {
         for (let pt of activeRoute) {
             if (pt.x >= cab.x - 0.1 && pt.x <= cab.x + cab.w + 0.1 && 
                 pt.y >= cab.y - 0.1 && pt.y <= cab.y + cab.h + 0.1) {
