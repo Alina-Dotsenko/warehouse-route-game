@@ -554,10 +554,10 @@ function renderGameScreen() {
         const idx = parseInt(cabEl.dataset.idx, 10);
         if (window.selectedCabinets.has(idx)) {
             window.selectedCabinets.delete(idx);
-            cabEl.classList.remove('cab-pick');
+            cabEl.classList.remove('cab-selected');
         } else {
             window.selectedCabinets.add(idx);
-            cabEl.classList.add('cab-pick');
+            cabEl.classList.add('cab-selected');
         }
     }
   };
