@@ -48,6 +48,7 @@
   --shadow-lg: 0 24px 60px rgba(0, 0, 0, 0.55);
 
   --tap: 44px;
+  --sheet-h: 62px; /* высота свёрнутой шторки, см. .sheet */
 
   --safe-b: env(safe-area-inset-bottom, 0px);
   --safe-l: env(safe-area-inset-left, 0px);
@@ -511,217 +512,171 @@ summary::-webkit-details-marker {
   padding-right: var(--safe-r);
 }
 
-/* Карта теперь в честных пропорциях и близка к квадрату. На широком экране
-   она упирается в высоту, поэтому жалоба и легенда уходят в боковую колонку —
-   иначе половина ширины монитора простаивала бы. */
-.game-body {
-  flex: 1 1 auto;
-  min-height: 0;
-  display: flex;
+/* ==========================================================================
+   Игровой экран: карта во весь экран, управление плавает поверх
+
+   Это пространственная задача, а не страница с контентом. Постоянная рамка
+   из шапки и подвала навсегда отнимала бы обзор, поэтому холст занимает всё
+   окно, а обвязка лежит сверху и перекрывает лишь небольшие участки, от
+   которых всегда можно отъехать.
+   ========================================================================== */
+
+.screen-game {
+  position: relative;
+  height: 100%;
+  overflow: hidden;
 }
 
-.game-side {
-  flex: 0 0 320px;
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-  border-right: 1px solid var(--line);
-  background: var(--surface);
-  overflow-y: auto;
+.map-stage {
+  position: absolute;
+  inset: 0;
+  background: #070c14;
+  overflow: hidden;
 }
 
-.game-main {
-  flex: 1 1 auto;
-  min-width: 0;
-  min-height: 0;
-  display: flex;
-  flex-direction: column;
+.map-canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+  touch-action: none;
+  cursor: grab;
 }
 
-.side-legend {
-  padding: var(--sp-4);
-  border-top: 1px solid var(--line);
-  margin-top: auto;
+.map-canvas:active {
+  cursor: grabbing;
 }
 
-.side-legend-title {
-  font-size: 0.75rem;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
-  color: var(--text-faint);
-  margin-bottom: var(--sp-3);
-}
+/* Плавающие группы -------------------------------------------------------- */
 
-.side-legend .legend-row {
-  font-size: 0.8125rem;
-  gap: var(--sp-2);
-}
-
-.side-legend .swatch {
-  width: 20px;
-  height: 20px;
-}
-
-/* Маршруты в легенде — это линии, а не плитки: общее правило выше делало из
-   них квадраты. */
-.side-legend .swatch-route-bad,
-.side-legend .swatch-route-good {
-  height: 4px;
-}
-
-.game-header {
-  flex-shrink: 0;
-  display: flex;
-  align-items: center;
-  gap: var(--sp-4);
-  padding: var(--sp-3) var(--sp-4);
-  border-bottom: 1px solid var(--line);
-  background: var(--surface);
-}
-
-.game-meta {
+.hud {
+  position: absolute;
+  z-index: 5;
   display: flex;
   align-items: center;
   gap: var(--sp-2);
-  margin-left: auto;
-  min-width: 0;
+  pointer-events: none; /* сама полоса прозрачна для жестов по карте */
 }
 
-.chip {
-  display: inline-flex;
+.hud > * {
+  pointer-events: auto;
+}
+
+.hud-top {
+  top: calc(var(--sp-3) + env(safe-area-inset-top, 0px));
+  left: calc(var(--sp-3) + var(--safe-l));
+  right: calc(var(--sp-3) + var(--safe-r));
+}
+
+.hud-tools {
+  top: calc(var(--sp-3) + 44px + var(--sp-2) + env(safe-area-inset-top, 0px));
+  left: calc(var(--sp-3) + var(--safe-l));
+  flex-wrap: wrap;
+}
+
+.hud-action {
+  left: 50%;
+  transform: translateX(-50%);
+  bottom: calc(var(--sp-4) + var(--sheet-h) + var(--safe-b));
+  max-width: calc(100% - 2 * (var(--tap) + var(--sp-5)));
+}
+
+.hud-spacer {
+  flex: 1;
+  pointer-events: none;
+}
+
+/* Общая «стеклянная» поверхность для всего, что лежит на карте. */
+.hud-pill,
+.hud-btn,
+.hud .segmented,
+.map-ctl,
+.map-tip,
+.sheet {
+  background: rgba(12, 19, 32, 0.86);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid var(--line-strong);
+}
+
+.hud-pill {
+  display: flex;
   align-items: center;
-  gap: var(--sp-1);
-  padding: 6px var(--sp-3);
+  gap: var(--sp-2);
+  height: var(--tap);
+  padding: 0 var(--sp-4);
   border-radius: var(--r-full);
-  background: var(--surface-2);
-  border: 1px solid var(--line);
   font-size: 0.8125rem;
   font-weight: 500;
   color: var(--text-dim);
   white-space: nowrap;
+  box-shadow: var(--shadow-md);
+  transition: border-color 0.2s, color 0.2s;
 }
 
-.chip b {
+.hud-pill b {
   color: var(--text);
   font-weight: 700;
 }
 
-.chip-count.is-ready {
-  border-color: rgba(34, 197, 94, 0.5);
-  background: rgba(34, 197, 94, 0.12);
+.pill-sep {
+  width: 1px;
+  height: 16px;
+  background: var(--line-strong);
+}
+
+.hud-pill.is-ready {
+  border-color: rgba(46, 224, 106, 0.55);
   color: #86efac;
 }
 
-.chip-count.is-ready b {
+.hud-pill.is-ready b {
   color: #bbf7d0;
 }
 
-.btn-quit {
-  flex-shrink: 0;
-}
-
-/* Жалоба ------------------------------------------------------------------ */
-
-.complaint {
-  flex-shrink: 0;
-  border-bottom: 1px solid var(--line);
-  background: var(--surface);
-}
-
-.game-side .complaint-preview {
-  white-space: normal;
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
-}
-
-.complaint-head {
-  display: flex;
-  align-items: center;
-  gap: var(--sp-3);
-  padding: var(--sp-3) var(--sp-4);
-  min-height: var(--tap);
-}
-
-.complaint-badge {
-  flex-shrink: 0;
-  padding: 3px var(--sp-2);
-  border-radius: var(--r-sm);
-  background: rgba(249, 17, 85, 0.14);
-  color: #ff7aa2;
-  font-size: 0.6875rem;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
-}
-
-.complaint-preview {
-  flex: 1;
-  min-width: 0;
-  font-size: 0.875rem;
-  color: var(--text-dim);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-/* Развёрнутая жалоба показывает полный текст, свёрнутая — обрезанное превью. */
-.complaint[open] .complaint-preview {
-  display: none;
-}
-
-.complaint-body {
-  padding: 0 var(--sp-4) var(--sp-4);
-  font-size: 0.9375rem;
-  line-height: 1.55;
+.hud-btn {
+  width: var(--tap);
+  height: var(--tap);
+  min-width: var(--tap);
+  display: grid;
+  place-items: center;
+  padding: 0;
+  border-radius: var(--r-md);
+  font: inherit;
+  font-size: 1.05rem;
   color: var(--text);
-  font-style: italic;
-  max-width: 70ch;
+  cursor: pointer;
+  box-shadow: var(--shadow-md);
+  transition: background 0.15s, color 0.15s, opacity 0.15s;
+  -webkit-tap-highlight-color: transparent;
 }
 
-.complaint:not([open]) .complaint-body {
-  display: none;
+.hud-btn:hover:not(:disabled) {
+  background: rgba(29, 40, 58, 0.94);
 }
 
-/* Панель инструментов ----------------------------------------------------- */
-
-.map-toolbar {
-  flex-shrink: 0;
-  display: flex;
-  align-items: center;
-  gap: var(--sp-2);
-  padding: var(--sp-2) var(--sp-4);
-  border-bottom: 1px solid var(--line);
-  background: var(--surface);
-  overflow-x: auto;
-  scrollbar-width: none;
+.hud-btn:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
 }
 
-.map-toolbar::-webkit-scrollbar {
-  display: none;
+.hud-btn.is-armed {
+  color: var(--warn);
+  border-color: rgba(250, 204, 21, 0.5);
 }
 
-.toolbar-spacer {
-  flex: 1;
-  min-width: 0;
-}
-
-.segmented {
+.hud .segmented {
   display: flex;
   gap: 2px;
   padding: 3px;
-  background: var(--bg);
-  border: 1px solid var(--line);
+  height: var(--tap);
   border-radius: var(--r-md);
-  flex-shrink: 0;
+  box-shadow: var(--shadow-md);
 }
 
 .seg-btn {
   display: inline-flex;
   align-items: center;
   gap: var(--sp-2);
-  min-height: 36px;
   padding: 0 var(--sp-3);
   font: inherit;
   font-size: 0.8125rem;
@@ -740,12 +695,8 @@ summary::-webkit-details-marker {
 }
 
 .seg-btn.is-active {
-  background: var(--surface-3);
+  background: rgba(45, 60, 84, 0.95);
   color: var(--text);
-}
-
-.seg-label-short {
-  display: none;
 }
 
 .dot {
@@ -762,53 +713,32 @@ summary::-webkit-details-marker {
   background: var(--route-good);
 }
 
-[hidden] {
-  display: none !important;
-}
-
-.hint-box {
-  flex-shrink: 0;
-  display: flex;
-  gap: var(--sp-3);
-  padding: var(--sp-3) var(--sp-4);
-  background: rgba(250, 204, 21, 0.08);
-  border-bottom: 1px solid rgba(250, 204, 21, 0.25);
-  font-size: 0.875rem;
-  line-height: 1.5;
-  color: #fde68a;
-}
-
-.hint-icon {
-  flex-shrink: 0;
-}
-
-/* Карта ------------------------------------------------------------------- */
-
-.map-stage {
-  position: relative;
-  flex: 1 1 auto;
-  min-height: 0;
-  background: #070c14;
+/* Кнопка проверки сама показывает состояние выбора — отдельная строка
+   статуса и постоянная нижняя панель для этого не нужны. */
+.btn-verify {
+  min-height: 52px;
+  padding: 0 var(--sp-6);
+  font-size: 1rem;
+  border-radius: var(--r-full);
+  box-shadow: 0 8px 28px rgba(0, 0, 0, 0.5);
+  max-width: 100%;
   overflow: hidden;
+  text-overflow: ellipsis;
 }
 
-.map-canvas {
-  display: block;
-  width: 100%;
-  height: 100%;
-  touch-action: none;
-  cursor: grab;
+.btn-verify:disabled {
+  background: rgba(12, 19, 32, 0.9);
+  backdrop-filter: blur(12px);
+  border: 1px solid var(--line-strong);
+  color: var(--text-dim);
+  opacity: 1;
 }
 
-.map-canvas:active {
-  cursor: grabbing;
-}
-
-/* Плавающие контролы масштаба поверх карты. */
 .map-controls {
   position: absolute;
-  right: var(--sp-3);
-  bottom: var(--sp-3);
+  z-index: 5;
+  right: calc(var(--sp-3) + var(--safe-r));
+  bottom: calc(var(--sp-4) + var(--sheet-h) + var(--safe-b));
   display: flex;
   flex-direction: column;
   gap: 1px;
@@ -828,9 +758,8 @@ summary::-webkit-details-marker {
   font-size: 1.25rem;
   font-weight: 600;
   color: var(--text);
-  background: rgba(15, 23, 36, 0.92);
-  backdrop-filter: blur(8px);
   border: none;
+  border-radius: 0;
   cursor: pointer;
   transition: background 0.15s;
   -webkit-tap-highlight-color: transparent;
@@ -847,18 +776,17 @@ summary::-webkit-details-marker {
 
 .map-tip {
   position: absolute;
+  z-index: 4;
   left: 50%;
-  bottom: var(--sp-4);
   transform: translateX(-50%);
+  bottom: calc(var(--sp-4) + var(--sheet-h) + 52px + var(--sp-3) + var(--safe-b));
   padding: var(--sp-2) var(--sp-4);
   border-radius: var(--r-full);
-  background: rgba(7, 11, 18, 0.85);
-  border: 1px solid var(--line);
-  backdrop-filter: blur(8px);
   font-size: 0.8125rem;
   color: var(--text-dim);
   pointer-events: none;
   white-space: nowrap;
+  /* Не залезаем под колонку зума в правом углу. */
   max-width: calc(100% - 2 * (var(--tap) + var(--sp-5)));
   overflow: hidden;
   text-overflow: ellipsis;
@@ -869,7 +797,6 @@ summary::-webkit-details-marker {
   opacity: 0;
 }
 
-/* Показываем ту подсказку, которая соответствует способу ввода. */
 .tip-touch {
   display: none;
 }
@@ -883,33 +810,209 @@ summary::-webkit-details-marker {
   }
 }
 
-/* Панель действий --------------------------------------------------------- */
+/* Пока карту тащат, обвязка притухает и не мешает смотреть. */
+.screen-game.is-panning .hud,
+.screen-game.is-panning .map-controls,
+.screen-game.is-panning .sheet {
+  opacity: 0.25;
+  transition: opacity 0.12s;
+}
 
-.game-actions {
-  flex-shrink: 0;
+/* Нижняя шторка ----------------------------------------------------------- */
+
+.sheet {
+  position: absolute;
+  z-index: 6;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  border-radius: var(--r-lg) var(--r-lg) 0 0;
+  border-bottom: none;
+  box-shadow: 0 -12px 40px rgba(0, 0, 0, 0.5);
+  max-height: 78%;
+  display: flex;
+  flex-direction: column;
+}
+
+.sheet-handle {
   display: flex;
   align-items: center;
-  gap: var(--sp-4);
+  gap: var(--sp-3);
+  width: 100%;
   padding: var(--sp-3) var(--sp-4);
-  padding-bottom: calc(var(--sp-3) + var(--safe-b));
-  border-top: 1px solid var(--line);
-  background: var(--surface);
-}
-
-.action-status {
-  flex: 1;
-  min-width: 0;
-  font-size: 0.875rem;
+  padding-bottom: var(--sp-3);
+  background: transparent;
+  border: none;
+  font: inherit;
   color: var(--text-dim);
+  text-align: left;
+  cursor: pointer;
+  position: relative;
+  -webkit-tap-highlight-color: transparent;
 }
 
-.action-status.is-ready {
-  color: #86efac;
-  font-weight: 600;
+.handle-grip {
+  position: absolute;
+  top: 6px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 36px;
+  height: 4px;
+  border-radius: var(--r-full);
+  background: var(--line-strong);
 }
 
-.action-status.is-over {
-  color: #fca5a5;
+.sheet-peek {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  min-width: 0;
+  flex: 1;
+  margin-top: 6px;
+}
+
+.sheet-peek-text {
+  font-size: 0.8125rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.sheet-handle .chevron {
+  margin-top: 6px;
+  transform: rotate(-135deg);
+}
+
+.sheet.is-open .sheet-handle .chevron {
+  transform: rotate(45deg);
+}
+
+.sheet.is-open .sheet-peek-text {
+  display: none;
+}
+
+.sheet-body {
+  display: none;
+  padding: 0 var(--sp-4) calc(var(--sp-4) + var(--safe-b));
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+.sheet.is-open .sheet-body {
+  display: block;
+}
+
+.complaint-badge {
+  flex-shrink: 0;
+  padding: 3px var(--sp-2);
+  border-radius: var(--r-sm);
+  background: rgba(249, 17, 85, 0.16);
+  color: #ff7aa2;
+  font-size: 0.6875rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.complaint-body {
+  font-size: 0.9375rem;
+  line-height: 1.55;
+  color: var(--text);
+  font-style: italic;
+  margin-bottom: var(--sp-4);
+}
+
+[hidden] {
+  display: none !important;
+}
+
+.hint-box {
+  display: flex;
+  gap: var(--sp-3);
+  padding: var(--sp-3);
+  margin-bottom: var(--sp-4);
+  border-radius: var(--r-md);
+  background: rgba(250, 204, 21, 0.09);
+  border: 1px solid rgba(250, 204, 21, 0.28);
+  font-size: 0.875rem;
+  line-height: 1.5;
+  color: #fde68a;
+}
+
+.hint-icon {
+  margin-top: 2px;
+  color: var(--warn);
+  flex-shrink: 0;
+}
+
+.sheet-legend {
+  padding-top: var(--sp-4);
+  border-top: 1px solid var(--line);
+}
+
+.side-legend-title {
+  font-size: 0.75rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-faint);
+  margin-bottom: var(--sp-3);
+}
+
+.sheet-legend .legend-row {
+  font-size: 0.8125rem;
+  gap: var(--sp-2);
+}
+
+.sheet-legend .swatch {
+  width: 20px;
+  height: 20px;
+}
+
+.sheet-legend .swatch-route-bad,
+.sheet-legend .swatch-route-good {
+  height: 4px;
+}
+
+/* На широком экране шторка — компактная карточка в углу, а не полоса
+   во всю ширину. */
+@media (min-width: 900px) {
+  :root {
+    --sheet-h: 0px;
+  }
+
+  /* На широком экране две плавающие строки сверху лишние — инструменты
+     встают в один ряд со счётчиком по центру. Полоса, перекрывающая карту,
+     становится вдвое тоньше. */
+  .hud-tools {
+    top: calc(var(--sp-3) + env(safe-area-inset-top, 0px));
+    left: 50%;
+    transform: translateX(-50%);
+    flex-wrap: nowrap;
+  }
+
+  .sheet {
+    left: var(--sp-3);
+    right: auto;
+    bottom: var(--sp-3);
+    width: 360px;
+    border-radius: var(--r-lg);
+    border-bottom: 1px solid var(--line-strong);
+    max-height: calc(100% - 200px);
+  }
+
+  .handle-grip {
+    display: none;
+  }
+
+  .sheet-peek,
+  .sheet-handle .chevron {
+    margin-top: 0;
+  }
+
+  .sheet-handle {
+    padding: var(--sp-3) var(--sp-4);
+  }
 }
 
 /* ==========================================================================
@@ -1086,91 +1189,7 @@ summary::-webkit-details-marker {
    Адаптация под узкие экраны
    ========================================================================== */
 
-@media (max-width: 1024px) {
-  .game-body {
-    flex-direction: column;
-  }
-
-  .game-side {
-    flex: 0 0 auto;
-    border-right: none;
-    border-bottom: 1px solid var(--line);
-    overflow: visible;
-  }
-
-  .side-legend {
-    display: none;
-  }
-
-  .game-side .complaint-preview {
-    white-space: nowrap;
-    display: block;
-  }
-}
-
 @media (max-width: 760px) {
-  .game-header {
-    padding: var(--sp-2) var(--sp-3);
-    gap: var(--sp-2);
-  }
-
-  .game-header .brand-sub {
-    display: none;
-  }
-
-  .chip {
-    padding: 5px var(--sp-2);
-    font-size: 0.75rem;
-  }
-
-  .complaint-head,
-  .map-toolbar {
-    padding-left: var(--sp-3);
-    padding-right: var(--sp-3);
-  }
-
-  /* Полные подписи вкладок не влезают — показываем короткие. Две голые
-     цветные точки без текста читатель расшифровать не может. */
-  .seg-label {
-    display: none;
-  }
-
-  .seg-label-short {
-    display: inline;
-  }
-
-  .seg-btn {
-    min-height: 38px;
-    padding: 0 var(--sp-2);
-    font-size: 0.75rem;
-  }
-
-  .btn-hint .btn-label {
-    display: none;
-  }
-
-  .btn-hint {
-    width: var(--tap);
-    min-width: var(--tap);
-    padding: 0;
-  }
-
-  .game-actions {
-    flex-direction: column;
-    align-items: stretch;
-    gap: var(--sp-2);
-    padding: var(--sp-3);
-    padding-bottom: calc(var(--sp-3) + var(--safe-b));
-  }
-
-  .action-status {
-    text-align: center;
-  }
-
-  .game-actions .btn {
-    width: 100%;
-  }
-
   .screen-start {
     padding: var(--sp-5) var(--sp-4) var(--sp-6);
   }
@@ -1183,22 +1202,54 @@ summary::-webkit-details-marker {
     padding: var(--sp-5) var(--sp-4);
   }
 
-  .hint-box {
-    padding: var(--sp-2) var(--sp-3);
-    font-size: 0.8125rem;
-    max-height: 22vh;
-    overflow-y: auto;
+  /* «Уровень 1/5» и «Выбрано 0/1» в одну строку не помещаются —
+     оставляем цифры, слова уводим в aria-подпись кнопок рядом. */
+  .pill-level,
+  .pill-count {
+    font-size: 0.75rem;
+  }
+
+  .hud-pill {
+    padding: 0 var(--sp-3);
+    gap: var(--sp-2);
+  }
+
+  .seg-btn {
+    padding: 0 var(--sp-2);
+    font-size: 0.75rem;
+  }
+
+  .btn-verify {
+    padding: 0 var(--sp-5);
+    font-size: 0.9375rem;
+  }
+
+  .map-tip {
+    font-size: 0.75rem;
   }
 }
 
-/* Совсем низкие экраны в альбомной ориентации: карта важнее текста. */
-@media (max-height: 520px) and (orientation: landscape) {
-  .complaint {
-    display: none;
+@media (max-width: 400px) {
+  .pill-level::after {
+    content: '';
   }
 
-  .game-actions {
-    flex-direction: row;
+  .hud-top,
+  .hud-tools {
+    gap: var(--sp-1);
+  }
+}
+
+/* Низкий альбомный экран: обвязка жмётся к краям, шторка закрыта. */
+@media (max-height: 480px) and (orientation: landscape) {
+  .hud-tools {
+    top: calc(var(--sp-2) + env(safe-area-inset-top, 0px));
+    left: auto;
+    right: calc(var(--sp-3) + 44px + var(--sp-2) + var(--safe-r));
+  }
+
+  .sheet {
+    max-height: 60%;
   }
 }
 

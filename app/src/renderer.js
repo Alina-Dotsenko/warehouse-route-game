@@ -245,6 +245,10 @@ export class TopologyMap {
     this.height = 0;
     this.dpr = 1;
 
+    // Плавающая обвязка перекрывает края холста. «Вписать» должно укладывать
+    // склад в свободную середину, иначе его край уезжает под панель.
+    this.insets = { top: 0, right: 0, bottom: 0, left: 0 };
+
     this._frame = null;
     this._dashPhase = 0;
     this._animating = false;
@@ -281,6 +285,10 @@ export class TopologyMap {
     this.resize();
     this.fit();
     this._emitSelection();
+  }
+
+  setViewInsets(insets) {
+    this.insets = { top: 0, right: 0, bottom: 0, left: 0, ...insets };
   }
 
   setActiveRoute(kind) {
@@ -337,6 +345,23 @@ export class TopologyMap {
     this.requestDraw();
   }
 
+  /** Прямоугольник холста, не закрытый плавающими панелями. */
+  _freeArea() {
+    const i = this.insets;
+    const w = Math.max(this.width - i.left - i.right, this.width * 0.4);
+    const h = Math.max(this.height - i.top - i.bottom, this.height * 0.4);
+    return {
+      w,
+      h,
+      cx: i.left + (this.width - i.left - i.right) / 2,
+      cy: i.top + (this.height - i.top - i.bottom) / 2,
+    };
+  }
+
+  /**
+   * Масштаб считаем по всему холсту, а не по свободной середине: ужимать карту
+   * под панели невыгодно — они перекрывают край, зато сам склад заметно крупнее.
+   */
   _fitScale() {
     if (this.width === 0) return 1;
     return Math.min(this.width / WORLD_W, this.height / (WORLD_H * Y_SQUEEZE));
@@ -345,17 +370,27 @@ export class TopologyMap {
   fit() {
     this.scale = this._fitScale();
     this.minScale = this.scale * MIN_SCALE_FACTOR;
-    this.originX = (this.width - WORLD_W * this.scale) / 2;
-    this.originY = (this.height - WORLD_H * Y_SQUEEZE * this.scale) / 2;
+
+    const mw = WORLD_W * this.scale;
+    const mh = WORLD_H * Y_SQUEEZE * this.scale;
+    const a = this._freeArea();
+
+    // Если склад помещается между панелями — ставим его туда и перекрытия нет
+    // вовсе (так выходит на телефоне в портрете). Если не помещается —
+    // центрируем по всему холсту и миримся с тем, что панели лежат на краях.
+    this.originX = mw <= a.w ? a.cx - mw / 2 : (this.width - mw) / 2;
+    this.originY = mh <= a.h ? a.cy - mh / 2 : (this.height - mh) / 2;
+
     this._emitView();
     this.requestDraw();
   }
 
   /** Плавно приблизиться к прямоугольнику мира (используется подсказкой). */
   focusOn(rect, padding = 1.6) {
+    const a = this._freeArea();
     const targetScale = Math.min(
-      this.width / (rect.w * padding),
-      this.height / (rect.h * Y_SQUEEZE * padding),
+      a.w / (rect.w * padding),
+      a.h / (rect.h * Y_SQUEEZE * padding),
       MAX_SCALE
     );
     const cx = rect.x + rect.w / 2;
@@ -388,9 +423,10 @@ export class TopologyMap {
     const startX = this.originX;
     const startY = this.originY;
 
+    const area = this._freeArea();
     const endScale = Math.max(this.minScale, Math.min(MAX_SCALE, targetScale));
-    const endX = this.width / 2 - worldCx * endScale;
-    const endY = this.height / 2 - worldCy * endScale * Y_SQUEEZE;
+    const endX = area.cx - worldCx * endScale;
+    const endY = area.cy - worldCy * endScale * Y_SQUEEZE;
 
     const t0 = performance.now();
     const dur = 420;

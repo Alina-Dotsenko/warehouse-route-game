@@ -126,37 +126,67 @@ export function gameScreen({ level, levelIndex, levelCount }) {
 
   return `
     <div class="screen screen-game">
-      <header class="game-header">
-        <div class="brand">
-          <span class="brand-mark">route-lab</span>
-          <span class="brand-sub">топология</span>
-        </div>
-        <div class="game-meta">
-          <span class="chip chip-level">Уровень ${levelIndex + 1} / ${levelCount}</span>
-          <span class="chip chip-count" id="sel-chip">
-            Выбрано <b id="sel-count">0</b> / <span id="sel-total">${total}</span>
-          </span>
-        </div>
-        <button class="btn btn-ghost btn-icon btn-quit" id="btn-quit" title="Выйти в меню" aria-label="Выйти в меню">✕</button>
-      </header>
+      <div class="map-stage" id="map-stage">
+        <canvas class="map-canvas" id="map-canvas"></canvas>
 
-      <div class="game-body">
-        <aside class="game-side">
-          <details class="complaint" id="complaint" open>
-            <summary class="complaint-head">
-              <span class="complaint-badge">Жалоба</span>
-              <span class="complaint-preview">${escapeHtml(level.complaint)}</span>
-              <span class="chevron" aria-hidden="true"></span>
-            </summary>
-            <p class="complaint-body">${escapeHtml(level.complaint)}</p>
-          </details>
+        <div class="hud hud-top">
+          <div class="hud-pill" id="sel-chip">
+            <span class="pill-level">Уровень ${levelIndex + 1}/${levelCount}</span>
+            <span class="pill-sep" aria-hidden="true"></span>
+            <span class="pill-count">Выбрано <b id="sel-count">0</b>/<span id="sel-total">${total}</span></span>
+          </div>
+          <div class="hud-spacer"></div>
+          <button class="hud-btn" id="btn-quit" title="Выйти в меню" aria-label="Выйти в меню">✕</button>
+        </div>
+
+        <div class="hud hud-tools">
+          <div class="segmented" role="tablist" aria-label="Маршрут">
+            <button class="seg-btn is-active" id="btn-route-bad" role="tab" aria-selected="true">
+              <span class="dot dot-bad"></span><span class="seg-label">Как есть</span>
+            </button>
+            <button class="seg-btn" id="btn-route-good" role="tab" aria-selected="false">
+              <span class="dot dot-good"></span><span class="seg-label">Как надо</span>
+            </button>
+          </div>
+          <button class="hud-btn" id="btn-hint" title="Подсказка" aria-label="Подсказка"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 18h6M10 22h4"/><path d="M12 2a7 7 0 0 0-4 12.7V17h8v-2.3A7 7 0 0 0 12 2Z"/></svg></button>
+          <button class="hud-btn" id="btn-clear-selection" title="Сбросить выбор" aria-label="Сбросить выбор" disabled>↺</button>
+        </div>
+
+        <div class="map-controls">
+          <button class="map-ctl" id="btn-zoom-in" title="Приблизить" aria-label="Приблизить">+</button>
+          <button class="map-ctl" id="btn-zoom-out" title="Отдалить" aria-label="Отдалить">−</button>
+          <button class="map-ctl" id="btn-zoom-fit" title="Показать весь склад" aria-label="Показать весь склад">⤢</button>
+        </div>
+
+        <div class="map-tip" id="map-tip">
+          <span class="tip-desktop">Колесо — масштаб, перетаскивание — сдвиг, клик — выбор шкафа</span>
+          <span class="tip-touch">Два пальца — масштаб, один — сдвиг, касание — выбор шкафа</span>
+        </div>
+
+        <div class="hud hud-action">
+          <button class="btn btn-primary btn-verify" id="btn-verify" disabled></button>
+        </div>
+      </div>
+
+      <div class="sheet" id="sheet">
+        <button class="sheet-handle" id="sheet-toggle" aria-expanded="false" aria-controls="sheet-body">
+          <span class="handle-grip" aria-hidden="true"></span>
+          <span class="sheet-peek">
+            <span class="complaint-badge">Жалоба</span>
+            <span class="sheet-peek-text">${escapeHtml(level.complaint)}</span>
+          </span>
+          <span class="chevron" aria-hidden="true"></span>
+        </button>
+
+        <div class="sheet-body" id="sheet-body">
+          <p class="complaint-body">${escapeHtml(level.complaint)}</p>
 
           <div class="hint-box" id="hint-box" hidden>
             <svg class="icon hint-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 18h6M10 22h4"/><path d="M12 2a7 7 0 0 0-4 12.7V17h8v-2.3A7 7 0 0 0 12 2Z"/></svg>
             <p>${escapeHtml(level.hintText)}</p>
           </div>
 
-          <div class="side-legend">
+          <div class="sheet-legend">
             <h3 class="side-legend-title">Обозначения</h3>
             <ul class="legend">
               <li class="legend-row"><span class="swatch swatch-cab"></span><span>Шкаф. Розовая грань — сторона подхода</span></li>
@@ -166,46 +196,7 @@ export function gameScreen({ level, levelIndex, levelCount }) {
               <li class="legend-row"><span class="swatch swatch-route-good"></span><span>Желаемый маршрут</span></li>
             </ul>
           </div>
-        </aside>
-
-        <main class="game-main">
-          <div class="map-toolbar">
-            <div class="segmented" role="tablist" aria-label="Маршрут">
-              <button class="seg-btn is-active" id="btn-route-bad" role="tab" aria-selected="true">
-                <span class="dot dot-bad"></span><span class="seg-label">Получившийся</span><span class="seg-label-short">Как есть</span>
-              </button>
-              <button class="seg-btn" id="btn-route-good" role="tab" aria-selected="false">
-                <span class="dot dot-good"></span><span class="seg-label">Желаемый</span><span class="seg-label-short">Как надо</span>
-              </button>
-            </div>
-
-            <div class="toolbar-spacer"></div>
-
-            <button class="btn btn-ghost btn-hint" id="btn-hint">
-              <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 18h6M10 22h4"/><path d="M12 2a7 7 0 0 0-4 12.7V17h8v-2.3A7 7 0 0 0 12 2Z"/></svg><span class="btn-label">Подсказка</span>
-            </button>
-
-            <button class="btn btn-ghost btn-icon btn-clear" id="btn-clear-selection" title="Сбросить выбор" aria-label="Сбросить выбор">↺</button>
-          </div>
-
-          <div class="map-stage" id="map-stage">
-            <canvas class="map-canvas" id="map-canvas"></canvas>
-            <div class="map-controls">
-              <button class="map-ctl" id="btn-zoom-in" title="Приблизить" aria-label="Приблизить">+</button>
-              <button class="map-ctl" id="btn-zoom-out" title="Отдалить" aria-label="Отдалить">−</button>
-              <button class="map-ctl" id="btn-zoom-fit" title="Показать весь склад" aria-label="Показать весь склад">⤢</button>
-            </div>
-            <div class="map-tip" id="map-tip">
-              <span class="tip-desktop">Колесо мыши — масштаб, перетаскивание — сдвиг, клик — выбор шкафа</span>
-              <span class="tip-touch">Двумя пальцами — масштаб, одним — сдвиг, касание — выбор шкафа</span>
-            </div>
-          </div>
-
-          <div class="game-actions">
-            <p class="action-status" id="action-status">Выберите ${total} ${plural(total, 'шкаф', 'шкафа', 'шкафов')} на карте</p>
-        <button class="btn btn-primary btn-lg" id="btn-verify" disabled>Проверить решение</button>
-          </div>
-        </main>
+        </div>
       </div>
 
       <div class="modal-backdrop" id="result-modal">

@@ -87,10 +87,10 @@ function renderGameScreen() {
 
   const total = level.solutionData.count;
 
+  const screen = app.querySelector('.screen-game');
   const canvas = document.getElementById('map-canvas');
   const selCount = document.getElementById('sel-count');
   const selChip = document.getElementById('sel-chip');
-  const actionStatus = document.getElementById('action-status');
   const btnVerify = document.getElementById('btn-verify');
   const btnZoomIn = document.getElementById('btn-zoom-in');
   const btnZoomOut = document.getElementById('btn-zoom-out');
@@ -101,16 +101,19 @@ function renderGameScreen() {
   const btnHint = document.getElementById('btn-hint');
   const btnQuit = document.getElementById('btn-quit');
   const hintBox = document.getElementById('hint-box');
-  const complaint = document.getElementById('complaint');
+  const sheet = document.getElementById('sheet');
+  const sheetToggle = document.getElementById('sheet-toggle');
   const mapTip = document.getElementById('map-tip');
   const modal = document.getElementById('result-modal');
 
-  // На узких экранах жалоба занимает слишком много высоты — сворачиваем её,
-  // оставляя одну строку превью.
-  if (window.matchMedia('(max-width: 760px)').matches) {
-    complaint.open = false;
-  }
+  const setSheetOpen = (open) => {
+    sheet.classList.toggle('is-open', open);
+    sheetToggle.setAttribute('aria-expanded', String(open));
+  };
+  sheetToggle.addEventListener('click', () => setSheetOpen(!sheet.classList.contains('is-open')));
 
+  // Кнопка проверки заодно служит индикатором: отдельная строка статуса и
+  // постоянная нижняя панель ради неё не нужны.
   const updateSelectionUI = (selected) => {
     const n = selected.size;
     selCount.textContent = String(n);
@@ -118,19 +121,16 @@ function renderGameScreen() {
     btnClear.disabled = n === 0;
 
     if (n === total) {
-      actionStatus.textContent = 'Готово — можно проверять';
-      actionStatus.className = 'action-status is-ready';
       btnVerify.disabled = false;
+      btnVerify.textContent = 'Проверить решение';
     } else if (n < total) {
       const left = total - n;
-      actionStatus.textContent = `Выберите ещё ${left} ${plural(left, 'шкаф', 'шкафа', 'шкафов')}`;
-      actionStatus.className = 'action-status';
       btnVerify.disabled = true;
+      btnVerify.textContent = `Выберите ещё ${left} ${plural(left, 'шкаф', 'шкафа', 'шкафов')}`;
     } else {
       const extra = n - total;
-      actionStatus.textContent = `Лишних шкафов: ${extra} — снимите выбор`;
-      actionStatus.className = 'action-status is-over';
       btnVerify.disabled = true;
+      btnVerify.textContent = `Снимите ${extra} ${plural(extra, 'лишний', 'лишних', 'лишних')}`;
     }
   };
 
@@ -144,10 +144,34 @@ function renderGameScreen() {
     onViewChange: updateViewUI,
   });
 
+  // Обвязка лежит поверх карты, поэтому «вписать» должно укладывать склад в
+  // свободную середину. Полосы меряем по факту: их высота зависит от ширины
+  // экрана, переноса кнопок и вырезов, захардкоженные числа тут разъезжаются.
+  const stage = document.getElementById('map-stage');
+  const tools = screen.querySelector('.hud-tools');
+  const action = screen.querySelector('.hud-action');
+
+  const applyInsets = () => {
+    const box = stage.getBoundingClientRect();
+    if (box.height === 0) return;
+    // Считаем только полосы во всю ширину. Зум прижат к правому углу, и
+    // держать под него отступ по всему низу — значит зря ужимать карту.
+    const top = tools.getBoundingClientRect().bottom - box.top;
+    const bottom = box.bottom - action.getBoundingClientRect().top;
+    map.setViewInsets({
+      top: Math.max(0, top) + 8,
+      bottom: Math.max(0, bottom) + 8,
+      left: 0,
+      right: 0,
+    });
+  };
+
+  applyInsets();
   map.setLevel(level);
   map.startAnimation();
 
-  // Подсказка про управление уходит после первого взаимодействия с картой.
+  window.addEventListener('resize', applyInsets);
+
   const dismissTip = () => {
     mapTip.classList.add('is-hidden');
     canvas.removeEventListener('pointerdown', dismissTip);
@@ -156,6 +180,19 @@ function renderGameScreen() {
   canvas.addEventListener('pointerdown', dismissTip);
   canvas.addEventListener('wheel', dismissTip, { passive: true });
   setTimeout(dismissTip, 6000);
+
+  // Пока карту тащат, панели притухают, чтобы не загораживали обзор.
+  let panTimer = null;
+  canvas.addEventListener('pointerdown', () => {
+    clearTimeout(panTimer);
+    screen.classList.add('is-panning');
+  });
+  const endPan = () => {
+    clearTimeout(panTimer);
+    panTimer = setTimeout(() => screen.classList.remove('is-panning'), 180);
+  };
+  canvas.addEventListener('pointerup', endPan);
+  canvas.addEventListener('pointercancel', endPan);
 
   btnZoomIn.addEventListener('click', () => map.zoomBy(1.6));
   btnZoomOut.addEventListener('click', () => map.zoomBy(1 / 1.6));
@@ -172,17 +209,20 @@ function renderGameScreen() {
   btnBad.addEventListener('click', () => setRoute('bad'));
   btnGood.addEventListener('click', () => setRoute('good'));
 
-  // Подсказка в два шага: сначала текст, потом подсветка зоны с наездом камеры.
+  // Подсказка в два шага: сначала текст в шторке, потом наезд на зону.
   let hintStep = 0;
   btnHint.addEventListener('click', () => {
     hintStep++;
     if (hintStep === 1) {
       hintBox.hidden = false;
-      btnHint.querySelector('.btn-label').textContent = 'Показать зону';
+      setSheetOpen(true);
+      btnHint.classList.add('is-armed');
+      btnHint.title = 'Показать зону на карте';
+      btnHint.setAttribute('aria-label', 'Показать зону на карте');
     } else {
+      setSheetOpen(false);
       map.setHintZoneVisible(true);
       btnHint.disabled = true;
-      btnHint.querySelector('.btn-label').textContent = 'Зона показана';
     }
   });
 
