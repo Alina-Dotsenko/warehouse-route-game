@@ -29,7 +29,6 @@ const SAY = {
 };
 
 const LEG_RATIO = 0.22;
-const BODY_ASPECT = 1122 / 1402;
 
 const COLORS = {
   leg: '#fec700',
@@ -289,70 +288,215 @@ export class Gosha {
     ctx.restore();
   }
 
-  /** Рохля позади: вилы с колёсами, поддон с коробкой и наклонная рукоять. */
-  _drawPallet(ctx, H) {
-    const back = -H * 0.44;
-    const tail = -H * 1.12;
-    const floorY = -H * 0.03;
+  /**
+   * Полноценная рохля позади Гоши: вилы, гидроузел, рукоять, поддон и груз.
+   * Спицы и светлая метка на шинах вращаются вместе с пройденным расстоянием.
+   */
+  _drawPallet(ctx, H, wheelPhase) {
+    const tail = -H * 1.43;
+    const head = -H * 0.54;
+    const floorY = -H * 0.025;
+    const deckY = floorY - H * 0.13;
+    const loadX = tail + H * 0.07;
+    const loadW = head - tail - H * 0.15;
+
+    const rounded = (x, y, w, h, r) => {
+      ctx.beginPath();
+      if (ctx.roundRect) ctx.roundRect(x, y, w, h, r);
+      else ctx.rect(x, y, w, h);
+    };
+
+    const wheel = (x, y, r, angle) => {
+      ctx.save();
+      ctx.translate(x, y);
+      ctx.rotate(angle);
+
+      ctx.fillStyle = COLORS.wheel;
+      ctx.beginPath();
+      ctx.arc(0, 0, r, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.strokeStyle = COLORS.wheelSide;
+      ctx.lineWidth = Math.max(1, r * 0.24);
+      ctx.stroke();
+
+      ctx.strokeStyle = COLORS.wheelHub;
+      ctx.lineWidth = Math.max(0.8, r * 0.16);
+      for (let i = 0; i < 3; i++) {
+        const a = (i / 3) * Math.PI * 2;
+        ctx.beginPath();
+        ctx.moveTo(Math.cos(a) * r * 0.24, Math.sin(a) * r * 0.24);
+        ctx.lineTo(Math.cos(a) * r * 0.68, Math.sin(a) * r * 0.68);
+        ctx.stroke();
+      }
+      ctx.fillStyle = COLORS.jackLight;
+      ctx.beginPath();
+      ctx.arc(0, 0, r * 0.25, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Светлая риска делает вращение заметным даже у маленького колеса.
+      ctx.strokeStyle = '#f4f7fb';
+      ctx.lineWidth = Math.max(1, r * 0.13);
+      ctx.beginPath();
+      ctx.arc(0, 0, r * 0.82, -0.3, 0.42);
+      ctx.stroke();
+      ctx.restore();
+    };
 
     ctx.save();
     ctx.lineCap = 'round';
     ctx.lineJoin = 'round';
 
-    ctx.strokeStyle = COLORS.steelDark;
-    ctx.lineWidth = Math.max(1.5, H * 0.035);
+    // Мягкая тень связывает мелкие детали рохли с полом.
+    const shadow = ctx.createLinearGradient(tail, 0, head, 0);
+    shadow.addColorStop(0, 'rgba(0,0,0,0.08)');
+    shadow.addColorStop(0.45, 'rgba(0,0,0,0.38)');
+    shadow.addColorStop(1, 'rgba(0,0,0,0.12)');
+    ctx.fillStyle = shadow;
     ctx.beginPath();
-    ctx.moveTo(-H * 0.16, -H * 0.5);
-    ctx.lineTo(back, floorY - H * 0.05);
+    ctx.ellipse((tail + head) / 2, floorY + H * 0.035, (head - tail) * 0.57, H * 0.07, 0, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Коробки: две разнесённые лицевые плоскости лучше читаются на масштабе,
+    // чем прежний одноцветный прямоугольник.
+    const boxBottom = deckY - H * 0.085;
+    const boxH = H * 0.28;
+    const cargoGradient = ctx.createLinearGradient(0, boxBottom - boxH, 0, boxBottom);
+    cargoGradient.addColorStop(0, COLORS.cargoLight);
+    cargoGradient.addColorStop(0.18, COLORS.cargo);
+    cargoGradient.addColorStop(1, COLORS.cargoDark);
+    ctx.fillStyle = cargoGradient;
+    rounded(loadX, boxBottom - boxH, loadW, boxH, H * 0.035);
+    ctx.fill();
+    ctx.strokeStyle = '#174178';
+    ctx.lineWidth = Math.max(1, H * 0.012);
     ctx.stroke();
 
-    const cw = Math.abs(tail - back) * 0.78;
-    const cx = (back + tail) / 2;
-    const ch = H * 0.3;
-    ctx.fillStyle = COLORS.cargo;
-    ctx.fillRect(cx - cw / 2, floorY - H * 0.1 - ch, cw, ch);
-    ctx.fillStyle = COLORS.cargoTop;
-    ctx.fillRect(cx - cw / 2, floorY - H * 0.1 - ch, cw, Math.max(1.5, ch * 0.16));
+    ctx.strokeStyle = 'rgba(255,255,255,0.45)';
+    ctx.lineWidth = Math.max(1, H * 0.012);
+    ctx.beginPath();
+    ctx.moveTo(loadX + loadW * 0.5, boxBottom - boxH + H * 0.025);
+    ctx.lineTo(loadX + loadW * 0.5, boxBottom - H * 0.025);
+    ctx.stroke();
+    ctx.fillStyle = 'rgba(235,244,255,0.78)';
+    rounded(loadX + loadW * 0.12, boxBottom - boxH * 0.68, loadW * 0.22, boxH * 0.18, H * 0.012);
+    ctx.fill();
 
-    ctx.fillStyle = COLORS.steel;
-    ctx.fillRect(tail, floorY - H * 0.1, back - tail, Math.max(1.5, H * 0.06));
-
-    ctx.fillStyle = COLORS.wheel;
-    const r = Math.max(1.5, H * 0.045);
-    for (const wx of [tail + r * 1.2, back - r * 1.2]) {
-      ctx.beginPath();
-      ctx.arc(wx, floorY, r, 0, Math.PI * 2);
+    // Деревянный поддон с отдельными верхними планками и тёмными кубиками.
+    ctx.fillStyle = COLORS.palletTop;
+    rounded(tail, deckY - H * 0.08, head - tail, H * 0.09, H * 0.018);
+    ctx.fill();
+    ctx.strokeStyle = COLORS.palletEdge;
+    ctx.lineWidth = Math.max(1, H * 0.012);
+    ctx.stroke();
+    ctx.fillStyle = COLORS.pallet;
+    for (const x of [tail + H * 0.1, tail + (head - tail) * 0.5, head - H * 0.13]) {
+      rounded(x - H * 0.045, deckY, H * 0.09, H * 0.075, H * 0.01);
       ctx.fill();
     }
+
+    // Две вилы под поддоном — ближняя светлее, дальняя темнее.
+    ctx.strokeStyle = COLORS.jackDark;
+    ctx.lineWidth = Math.max(2, H * 0.045);
+    ctx.beginPath();
+    ctx.moveTo(head + H * 0.02, deckY + H * 0.085);
+    ctx.lineTo(tail - H * 0.025, deckY + H * 0.085);
+    ctx.stroke();
+    ctx.strokeStyle = COLORS.jack;
+    ctx.lineWidth = Math.max(2.5, H * 0.055);
+    ctx.beginPath();
+    ctx.moveTo(head, deckY + H * 0.035);
+    ctx.lineTo(tail, deckY + H * 0.035);
+    ctx.stroke();
+
+    // Рулевой и грузовой ролики.
+    wheel(head - H * 0.035, floorY, Math.max(2.2, H * 0.072), -wheelPhase);
+    wheel(tail + H * 0.095, floorY, Math.max(1.7, H * 0.047), -wheelPhase * 1.48);
+
+    // Гидроузел и настоящий петлевой хват вместо одной наклонной палочки.
+    const gripX = -H * 0.27;
+    const gripY = -H * 0.53;
+    ctx.fillStyle = COLORS.jackDark;
+    rounded(head - H * 0.08, deckY - H * 0.08, H * 0.16, H * 0.18, H * 0.035);
+    ctx.fill();
+    ctx.fillStyle = COLORS.jackLight;
+    rounded(head - H * 0.048, deckY - H * 0.055, H * 0.096, H * 0.11, H * 0.025);
+    ctx.fill();
+
+    ctx.strokeStyle = COLORS.steelDark;
+    ctx.lineWidth = Math.max(3, H * 0.045);
+    ctx.beginPath();
+    ctx.moveTo(head, deckY - H * 0.02);
+    ctx.quadraticCurveTo(-H * 0.45, -H * 0.33, gripX, gripY);
+    ctx.stroke();
+    ctx.strokeStyle = COLORS.steel;
+    ctx.lineWidth = Math.max(1, H * 0.012);
+    ctx.beginPath();
+    ctx.moveTo(head + H * 0.008, deckY - H * 0.025);
+    ctx.quadraticCurveTo(-H * 0.44, -H * 0.33, gripX + H * 0.006, gripY);
+    ctx.stroke();
+
+    ctx.strokeStyle = COLORS.wheel;
+    ctx.lineWidth = Math.max(3, H * 0.04);
+    ctx.beginPath();
+    ctx.ellipse(gripX, gripY, H * 0.13, H * 0.07, -0.25, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.strokeStyle = COLORS.wheelSide;
+    ctx.lineWidth = Math.max(1, H * 0.012);
+    ctx.stroke();
 
     ctx.restore();
   }
 
-  /** Две ноги в противофазе: простой шаг, читаемый даже на 34 пикселях. */
+  /** Две ноги в рабочем комбинезоне идут в противофазе. */
   _drawLegs(ctx, H, phase, standing = false) {
     const legH = H * LEG_RATIO;
-    const hipY = -legH;
-    const swing = legH * 0.55;
+    const hipY = -legH * 1.05;
 
     ctx.save();
     ctx.lineCap = 'round';
-    ctx.lineWidth = Math.max(1.8, H * 0.05);
 
     for (let i = 0; i < 2; i++) {
-      // Стоя ноги слегка расставлены, иначе они сливаются в одну.
-      const footX = standing
-        ? (i === 0 ? -swing * 0.3 : swing * 0.3)
-        : Math.sin(phase + i * Math.PI) * swing;
-      ctx.strokeStyle = i === 0 ? COLORS.legDark : COLORS.leg;
+      const stride = standing
+        ? (i === 0 ? -legH * 0.12 : legH * 0.12)
+        : Math.sin(phase + i * Math.PI) * legH * 0.55;
+      const lift = standing ? 0 : Math.max(0, Math.sin(phase + i * Math.PI)) * legH * 0.2;
+      const hipX = (i === 0 ? -1 : 1) * H * 0.055;
+      const cuffX = hipX + stride * 0.58;
+      const cuffY = -legH * 0.48 - lift * 0.38;
+      const footX = hipX + stride;
+      const footY = -lift;
+
+      // Дальняя нога темнее; двойной штрих добавляет шов и объём штанине.
+      ctx.strokeStyle = COLORS.pantsEdge;
+      ctx.lineWidth = Math.max(4, H * 0.115);
       ctx.beginPath();
-      ctx.moveTo(0, hipY);
-      ctx.lineTo(footX, 0);
+      ctx.moveTo(hipX, hipY);
+      ctx.quadraticCurveTo(hipX + stride * 0.25, -legH * 0.77, cuffX, cuffY);
+      ctx.stroke();
+      ctx.strokeStyle = i === 0 ? COLORS.pants : COLORS.pantsLight;
+      ctx.lineWidth = Math.max(3, H * 0.087);
       ctx.stroke();
 
+      // Жёлтая голень и отдельная перепончатая лапа.
+      ctx.strokeStyle = i === 0 ? COLORS.legShade : COLORS.leg;
+      ctx.lineWidth = Math.max(2, H * 0.043);
       ctx.beginPath();
-      ctx.moveTo(footX - legH * 0.1, 0);
-      ctx.lineTo(footX + legH * 0.42, 0);
+      ctx.moveTo(cuffX, cuffY + H * 0.015);
+      ctx.quadraticCurveTo(cuffX + stride * 0.18, -legH * 0.2 - lift * 0.65, footX, footY - H * 0.025);
       ctx.stroke();
+
+      const footLen = legH * 0.66;
+      const footGrad = ctx.createLinearGradient(footX, footY - H * 0.04, footX + footLen, footY);
+      footGrad.addColorStop(0, i === 0 ? COLORS.legShade : COLORS.leg);
+      footGrad.addColorStop(1, '#ffd83b');
+      ctx.fillStyle = footGrad;
+      ctx.beginPath();
+      ctx.moveTo(footX - legH * 0.16, footY - H * 0.025);
+      ctx.quadraticCurveTo(footX + legH * 0.06, footY - H * 0.055, footX + footLen, footY - H * 0.012);
+      ctx.quadraticCurveTo(footX + footLen * 0.86, footY + H * 0.018, footX + footLen * 0.48, footY + H * 0.014);
+      ctx.lineTo(footX - legH * 0.08, footY + H * 0.008);
+      ctx.closePath();
+      ctx.fill();
     }
 
     ctx.restore();
@@ -361,10 +505,17 @@ export class Gosha {
   _drawBody(ctx, H, phase) {
     const legH = H * LEG_RATIO;
     const bodyH = H - legH;
-    const bodyW = bodyH * BODY_ASPECT;
+    // Пропорции берём у самой картинки: константа разъезжается, как только
+    // спрайт заменят или обрежут.
+    const aspect = this.body.naturalHeight
+      ? this.body.naturalWidth / this.body.naturalHeight
+      : 0.8;
+    const bodyW = bodyH * aspect;
     const bob = Math.abs(Math.sin(phase)) * H * 0.022;
 
     ctx.save();
+    ctx.imageSmoothingEnabled = true;
+    ctx.imageSmoothingQuality = 'high';
     ctx.shadowColor = 'rgba(0,0,0,0.5)';
     ctx.shadowBlur = H * 0.18;
     ctx.shadowOffsetY = H * 0.05;
