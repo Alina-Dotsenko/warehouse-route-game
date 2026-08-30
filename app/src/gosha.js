@@ -172,7 +172,10 @@ export class Gosha {
     const at = this._pointAt(this.dist);
     if (!at) return;
 
-    const H = Math.max(34, Math.min(80, 3.6 * s));
+    // Полная высота фигуры. Во время сцены камера уже наведена на шкаф, так
+    // что упереться в верхнюю границу — нормально: Гоша должен читаться как
+    // персонаж, а не как метка на плане.
+    const H = Math.max(42, Math.min(120, 5 * s));
     let px = ox + at.x * s;
     const py = oy + at.y * sy;
 
