@@ -140,56 +140,72 @@ export function gameScreen({ level, levelIndex, levelCount }) {
         <button class="btn btn-ghost btn-icon btn-quit" id="btn-quit" title="Выйти в меню" aria-label="Выйти в меню">✕</button>
       </header>
 
-      <details class="complaint" id="complaint" open>
-        <summary class="complaint-head">
-          <span class="complaint-badge">Жалоба</span>
-          <span class="complaint-preview">${escapeHtml(level.complaint)}</span>
-          <span class="chevron" aria-hidden="true"></span>
-        </summary>
-        <p class="complaint-body">${escapeHtml(level.complaint)}</p>
-      </details>
+      <div class="game-body">
+        <aside class="game-side">
+          <details class="complaint" id="complaint" open>
+            <summary class="complaint-head">
+              <span class="complaint-badge">Жалоба</span>
+              <span class="complaint-preview">${escapeHtml(level.complaint)}</span>
+              <span class="chevron" aria-hidden="true"></span>
+            </summary>
+            <p class="complaint-body">${escapeHtml(level.complaint)}</p>
+          </details>
 
-      <div class="map-toolbar">
-        <div class="segmented" role="tablist" aria-label="Маршрут">
-          <button class="seg-btn is-active" id="btn-route-bad" role="tab" aria-selected="true">
-            <span class="dot dot-bad"></span><span class="seg-label">Получившийся</span><span class="seg-label-short">Как есть</span>
-          </button>
-          <button class="seg-btn" id="btn-route-good" role="tab" aria-selected="false">
-            <span class="dot dot-good"></span><span class="seg-label">Желаемый</span><span class="seg-label-short">Как надо</span>
-          </button>
-        </div>
+          <div class="hint-box" id="hint-box" hidden>
+            <svg class="icon hint-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 18h6M10 22h4"/><path d="M12 2a7 7 0 0 0-4 12.7V17h8v-2.3A7 7 0 0 0 12 2Z"/></svg>
+            <p>${escapeHtml(level.hintText)}</p>
+          </div>
 
-        <div class="toolbar-spacer"></div>
+          <div class="side-legend">
+            <h3 class="side-legend-title">Обозначения</h3>
+            <ul class="legend">
+              <li class="legend-row"><span class="swatch swatch-cab"></span><span>Шкаф. Розовая грань — сторона подхода</span></li>
+              <li class="legend-row"><span class="swatch swatch-pick"></span><span>Отсюда нужно забрать товар</span></li>
+              <li class="legend-row"><span class="swatch swatch-blind"></span><span>Глухой блок — подойти нельзя</span></li>
+              <li class="legend-row"><span class="swatch swatch-route-bad"></span><span>Получившийся маршрут</span></li>
+              <li class="legend-row"><span class="swatch swatch-route-good"></span><span>Желаемый маршрут</span></li>
+            </ul>
+          </div>
+        </aside>
 
-        <button class="btn btn-ghost btn-hint" id="btn-hint">
-          <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 18h6M10 22h4"/><path d="M12 2a7 7 0 0 0-4 12.7V17h8v-2.3A7 7 0 0 0 12 2Z"/></svg><span class="btn-label">Подсказка</span>
-        </button>
+        <main class="game-main">
+          <div class="map-toolbar">
+            <div class="segmented" role="tablist" aria-label="Маршрут">
+              <button class="seg-btn is-active" id="btn-route-bad" role="tab" aria-selected="true">
+                <span class="dot dot-bad"></span><span class="seg-label">Получившийся</span><span class="seg-label-short">Как есть</span>
+              </button>
+              <button class="seg-btn" id="btn-route-good" role="tab" aria-selected="false">
+                <span class="dot dot-good"></span><span class="seg-label">Желаемый</span><span class="seg-label-short">Как надо</span>
+              </button>
+            </div>
 
-        <button class="btn btn-ghost btn-icon btn-clear" id="btn-clear-selection" title="Сбросить выбор" aria-label="Сбросить выбор">↺</button>
-      </div>
+            <div class="toolbar-spacer"></div>
 
-      <div class="hint-box" id="hint-box" hidden>
-        <svg class="icon hint-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 18h6M10 22h4"/><path d="M12 2a7 7 0 0 0-4 12.7V17h8v-2.3A7 7 0 0 0 12 2Z"/></svg>
-        <p>${escapeHtml(level.hintText)}</p>
-      </div>
+            <button class="btn btn-ghost btn-hint" id="btn-hint">
+              <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 18h6M10 22h4"/><path d="M12 2a7 7 0 0 0-4 12.7V17h8v-2.3A7 7 0 0 0 12 2Z"/></svg><span class="btn-label">Подсказка</span>
+            </button>
 
-      <div class="map-stage" id="map-stage">
-        <canvas class="map-canvas" id="map-canvas"></canvas>
-        <div class="map-controls">
-          <button class="map-ctl" id="btn-zoom-in" title="Приблизить" aria-label="Приблизить">+</button>
-          <button class="map-ctl" id="btn-zoom-out" title="Отдалить" aria-label="Отдалить">−</button>
-          <button class="map-ctl" id="btn-zoom-fit" title="Показать весь склад" aria-label="Показать весь склад">⤢</button>
-        </div>
-        <div class="map-tip" id="map-tip">
-          <span class="tip-desktop">Колесо мыши — масштаб, перетаскивание — сдвиг, клик — выбор шкафа</span>
-          <span class="tip-touch">Двумя пальцами — масштаб, одним — сдвиг, касание — выбор шкафа</span>
-        </div>
-        <div class="map-scale" id="map-scale" aria-hidden="true"></div>
-      </div>
+            <button class="btn btn-ghost btn-icon btn-clear" id="btn-clear-selection" title="Сбросить выбор" aria-label="Сбросить выбор">↺</button>
+          </div>
 
-      <div class="game-actions">
-        <p class="action-status" id="action-status">Выберите ${total} ${plural(total, 'шкаф', 'шкафа', 'шкафов')} на карте</p>
+          <div class="map-stage" id="map-stage">
+            <canvas class="map-canvas" id="map-canvas"></canvas>
+            <div class="map-controls">
+              <button class="map-ctl" id="btn-zoom-in" title="Приблизить" aria-label="Приблизить">+</button>
+              <button class="map-ctl" id="btn-zoom-out" title="Отдалить" aria-label="Отдалить">−</button>
+              <button class="map-ctl" id="btn-zoom-fit" title="Показать весь склад" aria-label="Показать весь склад">⤢</button>
+            </div>
+            <div class="map-tip" id="map-tip">
+              <span class="tip-desktop">Колесо мыши — масштаб, перетаскивание — сдвиг, клик — выбор шкафа</span>
+              <span class="tip-touch">Двумя пальцами — масштаб, одним — сдвиг, касание — выбор шкафа</span>
+            </div>
+          </div>
+
+          <div class="game-actions">
+            <p class="action-status" id="action-status">Выберите ${total} ${plural(total, 'шкаф', 'шкафа', 'шкафов')} на карте</p>
         <button class="btn btn-primary btn-lg" id="btn-verify" disabled>Проверить решение</button>
+          </div>
+        </main>
       </div>
 
       <div class="modal-backdrop" id="result-modal">

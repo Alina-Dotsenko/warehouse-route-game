@@ -12,7 +12,10 @@
 
   --route-bad: #ff8a3d;
   --route-good: #22d3ee;
-  --pick: #22c55e;
+  --pick: #2ee06a;
+  --cab: #9db2d4;
+  --cab-blind: #4d5f83;
+  --cab-blind-edge: #7d8fb5;
   --facing: #ff2d92;
   --danger: #ef4444;
   --warn: #facc15;
@@ -446,7 +449,7 @@ summary::-webkit-details-marker {
 }
 
 .swatch-cab {
-  background: #5b6b85;
+  background: var(--cab);
   border-bottom: 4px solid var(--facing);
 }
 
@@ -456,8 +459,8 @@ summary::-webkit-details-marker {
 }
 
 .swatch-blind {
-  background: #2b3648;
-  border: 1px solid #3a465c;
+  background: var(--cab-blind);
+  border: 1px solid var(--cab-blind-edge);
 }
 
 .swatch-route-bad,
@@ -506,6 +509,65 @@ summary::-webkit-details-marker {
 .screen-game {
   padding-left: var(--safe-l);
   padding-right: var(--safe-r);
+}
+
+/* Карта теперь в честных пропорциях и близка к квадрату. На широком экране
+   она упирается в высоту, поэтому жалоба и легенда уходят в боковую колонку —
+   иначе половина ширины монитора простаивала бы. */
+.game-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+}
+
+.game-side {
+  flex: 0 0 320px;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  border-right: 1px solid var(--line);
+  background: var(--surface);
+  overflow-y: auto;
+}
+
+.game-main {
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.side-legend {
+  padding: var(--sp-4);
+  border-top: 1px solid var(--line);
+  margin-top: auto;
+}
+
+.side-legend-title {
+  font-size: 0.75rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-faint);
+  margin-bottom: var(--sp-3);
+}
+
+.side-legend .legend-row {
+  font-size: 0.8125rem;
+  gap: var(--sp-2);
+}
+
+.side-legend .swatch {
+  width: 20px;
+  height: 20px;
+}
+
+/* Маршруты в легенде — это линии, а не плитки: общее правило выше делало из
+   них квадраты. */
+.side-legend .swatch-route-bad,
+.side-legend .swatch-route-good {
+  height: 4px;
 }
 
 .game-header {
@@ -565,6 +627,13 @@ summary::-webkit-details-marker {
   flex-shrink: 0;
   border-bottom: 1px solid var(--line);
   background: var(--surface);
+}
+
+.game-side .complaint-preview {
+  white-space: normal;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
 }
 
 .complaint-head {
@@ -977,7 +1046,7 @@ summary::-webkit-details-marker {
 
 .ed-cab {
   position: absolute;
-  background: #5b6b85;
+  background: var(--cab);
   border: 1px solid rgba(10, 16, 28, 0.55);
 }
 
@@ -999,7 +1068,8 @@ summary::-webkit-details-marker {
   border-right: 3px solid var(--facing);
 }
 .ed-cab.facing-none {
-  background: #2b3648;
+  background: var(--cab-blind);
+  border-color: var(--cab-blind-edge);
 }
 
 .ed-dot {
@@ -1015,6 +1085,28 @@ summary::-webkit-details-marker {
 /* ==========================================================================
    Адаптация под узкие экраны
    ========================================================================== */
+
+@media (max-width: 1024px) {
+  .game-body {
+    flex-direction: column;
+  }
+
+  .game-side {
+    flex: 0 0 auto;
+    border-right: none;
+    border-bottom: 1px solid var(--line);
+    overflow: visible;
+  }
+
+  .side-legend {
+    display: none;
+  }
+
+  .game-side .complaint-preview {
+    white-space: nowrap;
+    display: block;
+  }
+}
 
 @media (max-width: 760px) {
   .game-header {

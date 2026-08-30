@@ -14,7 +14,7 @@
  *   При таком сжатии шкаф 0.84 x 1.68 выглядит квадратом — как и задумано.
  */
 
-const Y_SQUEEZE = 0.5;
+const Y_SQUEEZE = 1;
 
 // Размеры мира в собственных единицах (ширина по X, высота по Y).
 const WORLD_W = 100;
@@ -34,14 +34,29 @@ const MIN_PICK_MARKER_PX = 6;
 
 const COLORS = {
   outside: '#070c14',
-  floor: '#111c2e',
+  floor: '#132038',
+  floorLine: 'rgba(255,255,255,0.028)',
   bounds: 'rgba(120,160,255,0.28)',
-  cabinet: '#5b6b85',
-  cabinetEdge: 'rgba(10,16,28,0.55)',
-  cabinetBlind: '#2b3648',
+
+  // Обычный шкаф: светлый корпус с бликом по верхней грани и тенью по нижней —
+  // на общем плане ряды читаются как объём, а не как плоская заливка.
+  cabinet: '#9db2d4',
+  cabinetTop: '#c2d2ec',
+  cabinetShade: '#6d81a6',
+  cabinetEdge: 'rgba(10,17,32,0.5)',
+
+  // Глухие блоки — это стены из шкафов, к которым нельзя подойти. Их до
+  // половины на уровне, поэтому им нужен и свой тон, и заметный контур:
+  // без контура тёмная заливка сливалась с полом.
+  blind: '#4d5f83',
+  blindEdge: '#7d8fb5',
+
   facing: '#ff2d92',
-  pick: '#22c55e',
-  pickRing: '#86efac',
+  facingGlow: 'rgba(255,45,146,0.35)',
+
+  pick: '#2ee06a',
+  pickTop: '#7df3a6',
+
   selected: '#ef4444',
   selectedFill: 'rgba(239,68,68,0.45)',
   obstacle: 'rgba(8,12,20,0.9)',
@@ -52,6 +67,11 @@ const COLORS = {
   hintZone: 'rgba(250,204,21,0.16)',
   hintStroke: '#facc15',
 };
+
+/** roundRect есть не везде — на старых движках падаем обратно на прямые углы. */
+const HAS_ROUND_RECT =
+  typeof CanvasRenderingContext2D !== 'undefined' &&
+  typeof CanvasRenderingContext2D.prototype.roundRect === 'function';
 
 /**
  * Строит массив точек маршрута с той же логикой «диагональ + прямая»,
@@ -666,10 +686,24 @@ export class TopologyMap {
    * и заливаем разом. Смена состояния контекста — самая дорогая операция,
    * поэтому их тут ровно столько, сколько цветов.
    */
+  /**
+   * Шкафы рисуются пачками по материалу: прямоугольники накапливаются в один
+   * путь и заливаются разом. Смена состояния контекста — самая дорогая
+   * операция, поэтому их тут ровно столько, сколько материалов.
+   *
+   * Уровни детализации подобраны по экранному размеру шкафа: на общем плане
+   * это просто плитки, ближе появляются контур и объём, ещё ближе — грань
+   * подхода и скругления.
+   */
   _drawCabinets(ctx, ox, oy, s, sy, x0, x1, y0, y1) {
     const cabs = this.cabinets;
     const cellW = 0.84 * s;
-    const showDetail = cellW >= DETAIL_THRESHOLD_PX;
+    const cellH = 1.68 * sy;
+    const minSide = Math.min(cellW, cellH);
+
+    const showEdges = minSide >= 2.5;
+    const showDetail = minSide >= DETAIL_THRESHOLD_PX;
+    const showRound = minSide >= 14 && HAS_ROUND_RECT;
 
     const normal = [];
     const blind = [];
@@ -683,68 +717,140 @@ export class TopologyMap {
       else normal.push(i);
     }
 
+    const radius = showRound ? Math.min(3, minSide * 0.14) : 0;
+
+    const addRect = (c) => {
+      const px = ox + c.x * s;
+      const py = oy + c.y * sy;
+      const pw = Math.max(c.w * s, 1);
+      const ph = Math.max(c.h * sy, 1);
+      if (radius > 0) ctx.roundRect(px, py, pw, ph, radius);
+      else ctx.rect(px, py, pw, ph);
+    };
+
     const fillGroup = (list, color) => {
       if (list.length === 0) return;
       ctx.fillStyle = color;
       ctx.beginPath();
-      for (const i of list) {
-        const c = cabs[i];
-        ctx.rect(ox + c.x * s, oy + c.y * sy, Math.max(c.w * s, 1), Math.max(c.h * sy, 1));
-      }
+      for (const i of list) addRect(cabs[i]);
       ctx.fill();
     };
 
     fillGroup(normal, COLORS.cabinet);
-    fillGroup(blind, COLORS.cabinetBlind);
     fillGroup(picks, COLORS.pick);
 
-    // Обводка и полосы подхода читаются только на достаточном приближении.
-    if (showDetail) {
-      ctx.strokeStyle = COLORS.cabinetEdge;
-      ctx.lineWidth = 1;
+    // Глухие блоки светлее пола, но темнее обычных шкафов, и всегда с контуром:
+    // одной заливкой они терялись на фоне.
+    if (blind.length > 0) {
+      ctx.fillStyle = COLORS.blind;
       ctx.beginPath();
-      for (const i of normal) {
-        const c = cabs[i];
-        ctx.rect(ox + c.x * s, oy + c.y * sy, c.w * s, c.h * sy);
+      for (const i of blind) addRect(cabs[i]);
+      ctx.fill();
+      if (showEdges) {
+        ctx.strokeStyle = COLORS.blindEdge;
+        ctx.lineWidth = Math.min(1.25, minSide * 0.12);
+        ctx.stroke();
       }
-      ctx.stroke();
+    }
 
-      const stripe = Math.max(1.25, Math.min(2.5, cellW * 0.16));
-      ctx.fillStyle = COLORS.facing;
+    if (!showDetail) {
+      this._drawPickMarkers(ctx, ox, oy, s, sy, picks);
+      return;
+    }
+
+    // Блик по верхней грани и тень по нижней дают корпусу объём.
+    const bevel = Math.max(1, Math.min(2.5, cellH * 0.1));
+
+    const bevelGroup = (list, topColor) => {
+      if (list.length === 0) return;
+      ctx.fillStyle = topColor;
       ctx.beginPath();
-      for (let k = 0; k < cabs.length; k++) {
-        const c = cabs[k];
-        if (c.x > x1 || c.x + c.w < x0 || c.y > y1 || c.y + c.h < y0) continue;
-        const f = c.facing;
-        if (!f || f === 'none') continue;
-        const px = ox + c.x * s;
-        const py = oy + c.y * sy;
-        const pw = c.w * s;
-        const ph = c.h * sy;
-        if (f === 'bottom') ctx.rect(px, py + ph - stripe, pw, stripe);
-        else if (f === 'top') ctx.rect(px, py, pw, stripe);
-        else if (f === 'left') ctx.rect(px, py, stripe, ph);
-        else if (f === 'right') ctx.rect(px + pw - stripe, py, stripe, ph);
+      for (const i of list) {
+        const c = cabs[i];
+        ctx.rect(ox + c.x * s, oy + c.y * sy, c.w * s, bevel);
       }
+      ctx.fill();
+    };
+
+    bevelGroup(normal, COLORS.cabinetTop);
+    bevelGroup(picks, COLORS.pickTop);
+
+    ctx.fillStyle = COLORS.cabinetShade;
+    ctx.beginPath();
+    for (const i of normal) {
+      const c = cabs[i];
+      ctx.rect(ox + c.x * s, oy + (c.y + c.h) * sy - bevel, c.w * s, bevel);
+    }
+    ctx.fill();
+
+    ctx.strokeStyle = COLORS.cabinetEdge;
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    for (const i of normal) addRect(cabs[i]);
+    for (const i of picks) addRect(cabs[i]);
+    ctx.stroke();
+
+    // Грань подхода — ключевая информация уровня: именно её разворот и есть
+    // та ошибка, которую ищет игрок. Рисуем с лёгким свечением наружу.
+    const stripe = Math.max(1.5, Math.min(3.5, minSide * 0.16));
+    const facing = [];
+    for (let k = 0; k < cabs.length; k++) {
+      const c = cabs[k];
+      if (c.x > x1 || c.x + c.w < x0 || c.y > y1 || c.y + c.h < y0) continue;
+      if (!c.facing || c.facing === 'none') continue;
+      facing.push(k);
+    }
+    if (facing.length === 0) return;
+
+    const facingRect = (c, thickness, outward) => {
+      const px = ox + c.x * s;
+      const py = oy + c.y * sy;
+      const pw = c.w * s;
+      const ph = c.h * sy;
+      const o = outward;
+      switch (c.facing) {
+        case 'bottom':
+          return [px, py + ph - thickness + o, pw, thickness];
+        case 'top':
+          return [px, py - o, pw, thickness];
+        case 'left':
+          return [px - o, py, thickness, ph];
+        default:
+          return [px + pw - thickness + o, py, thickness, ph];
+      }
+    };
+
+    if (minSide >= 12) {
+      ctx.fillStyle = COLORS.facingGlow;
+      ctx.beginPath();
+      for (const k of facing) ctx.rect(...facingRect(cabs[k], stripe * 2.2, stripe));
       ctx.fill();
     }
 
-    // Целевые шкафы получают минимальный экранный размер: на общем плане
-    // без этого не видно, куда вообще идёт сборщик.
-    const pickScreen = 0.84 * s;
-    if (pickScreen < MIN_PICK_MARKER_PX && picks.length > 0) {
-      ctx.fillStyle = COLORS.pick;
-      const r = MIN_PICK_MARKER_PX / 2;
-      ctx.beginPath();
-      for (const i of picks) {
-        const c = cabs[i];
-        const cx = ox + (c.x + c.w / 2) * s;
-        const cy = oy + (c.y + c.h / 2) * sy;
-        ctx.moveTo(cx + r, cy);
-        ctx.arc(cx, cy, r, 0, Math.PI * 2);
-      }
-      ctx.fill();
+    ctx.fillStyle = COLORS.facing;
+    ctx.beginPath();
+    for (const k of facing) ctx.rect(...facingRect(cabs[k], stripe, 0));
+    ctx.fill();
+  }
+
+  /**
+   * На общем плане шкаф занимает 2-3 пикселя, и цели маршрута теряются.
+   * Рисуем их точками фиксированного минимального размера.
+   */
+  _drawPickMarkers(ctx, ox, oy, s, sy, picks) {
+    if (picks.length === 0 || 0.84 * s >= MIN_PICK_MARKER_PX) return;
+    const cabs = this.cabinets;
+    const r = MIN_PICK_MARKER_PX / 2;
+    ctx.fillStyle = COLORS.pick;
+    ctx.beginPath();
+    for (const i of picks) {
+      const c = cabs[i];
+      const cx = ox + (c.x + c.w / 2) * s;
+      const cy = oy + (c.y + c.h / 2) * sy;
+      ctx.moveTo(cx + r, cy);
+      ctx.arc(cx, cy, r, 0, Math.PI * 2);
     }
+    ctx.fill();
   }
 
   _drawHintZone(ctx, ox, oy, s, sy) {
