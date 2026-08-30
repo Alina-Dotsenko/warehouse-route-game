@@ -15,14 +15,19 @@
 
 import bodyUrl from './assets/gosha/gosha-body.png';
 
-// Сколько единиц мира Гоша проходит перед целью — чтобы был виден разбег.
-const RUN_UP = 26;
+// Подход к шкафу — буквально несколько шагов: камера уже наведена, длинный
+// разбег только тянул бы время.
+const APPROACH = 11;
+const STRIDE = 3.2;      // длина шага в единицах мира, отсюда ~3.5 шага
 
-const RUN_MS = 1100;    // разбег до шкафа
-const THROUGH_MS = 700; // проход дальше при верном ответе
-const BUMP_MS = 850;    // упор при неверном
+const APPROACH_MS = 1500; // неспешно, чтобы было видно сами шаги
+const THROUGH_MS = 1100;  // проход дальше при верном ответе
+const BUMP_MS = 1300;     // упор при неверном — с репликой, её надо прочесть
 
-const STRIDE = 3.2;     // длина шага в единицах мира
+const SAY = {
+  pass: 'Путь свободен!',
+  block: 'Тут не пройти',
+};
 
 const LEG_RATIO = 0.17;
 const BODY_ASPECT = 78 / 128;
@@ -92,13 +97,13 @@ export class Gosha {
     }
 
     this.to = Math.max(0, Math.min(targetDist, this.total));
-    this.from = Math.max(0, this.to - RUN_UP);
+    this.from = Math.max(0, this.to - APPROACH);
     this.dist = this.from;
     this.pass = pass;
     this.onDone = onDone;
     this.phase = 'run';
     this.startedAt = performance.now();
-    this.duration = RUN_MS;
+    this.duration = APPROACH_MS;
     this.visible = true;
   }
 
@@ -134,13 +139,13 @@ export class Gosha {
     const t = Math.min(1, (now - this.startedAt) / this.duration);
 
     if (this.phase === 'run') {
-      const e = 1 - Math.pow(1 - t, 2); // тормозит у самого шкафа
+      const e = 1 - Math.pow(1 - t, 1.5); // чуть притормаживает у шкафа
       this.dist = this.from + (this.to - this.from) * e;
       if (t >= 1) {
         if (this.pass) {
           this.phase = 'through';
           this.from = this.to;
-          this.to = Math.min(this.total, this.to + RUN_UP * 0.8);
+          this.to = Math.min(this.total, this.to + APPROACH);
           this.duration = THROUGH_MS;
         } else {
           this.phase = 'bump';
@@ -201,6 +206,49 @@ export class Gosha {
     ctx.restore();
 
     if (bumping) this._drawImpact(ctx, px, py - H * 0.45, H, now);
+
+    if (this.phase === 'bump' || this.phase === 'through') {
+      const t = (now - this.startedAt) / this.duration;
+      const alpha = Math.min(1, t * 5) * Math.min(1, (1 - t) * 6 + 0.35);
+      this._drawBubble(ctx, px, py - H * 1.05, H, this.pass ? SAY.pass : SAY.block, this.pass, alpha);
+    }
+  }
+
+  /** Реплика Гоши: светлое облачко с хвостиком, направленным на него. */
+  _drawBubble(ctx, px, py, H, text, good, alpha) {
+    const fs = Math.max(11, H * 0.16);
+    ctx.save();
+    ctx.globalAlpha = Math.max(0, Math.min(1, alpha));
+    ctx.font = `600 ${fs}px Inter, system-ui, sans-serif`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+
+    const padX = fs * 0.75;
+    const padY = fs * 0.5;
+    const w = ctx.measureText(text).width + padX * 2;
+    const h = fs + padY * 2;
+    const x = px - w / 2;
+    const y = py - h;
+    const r = Math.min(h / 2, fs * 0.7);
+    const tail = fs * 0.45;
+
+    ctx.beginPath();
+    if (ctx.roundRect) ctx.roundRect(x, y, w, h, r);
+    else ctx.rect(x, y, w, h);
+    ctx.moveTo(px - tail, y + h);
+    ctx.lineTo(px, y + h + tail);
+    ctx.lineTo(px + tail, y + h);
+    ctx.closePath();
+
+    ctx.fillStyle = '#f2f6fd';
+    ctx.fill();
+    ctx.strokeStyle = good ? '#22a457' : '#e11d48';
+    ctx.lineWidth = 2;
+    ctx.stroke();
+
+    ctx.fillStyle = good ? '#14532d' : '#7f1020';
+    ctx.fillText(text, px, y + h / 2);
+    ctx.restore();
   }
 
   /** Рохля позади: вилы с колёсами, поддон с коробкой и наклонная рукоять. */
