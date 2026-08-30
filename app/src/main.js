@@ -4,6 +4,7 @@ import { TopologyMap } from './renderer.js';
 import { nameScreen, startScreen, gameScreen, endScreen, plural } from './templates.js';
 import { sound } from './audio.js';
 import { mountGoshaShowcases } from './gosha.js';
+import { icon as uiIcon } from './icons.js';
 
 const app = document.querySelector('#app');
 const isAdmin = new URLSearchParams(window.location.search).get('admin') === 'true';
@@ -105,6 +106,9 @@ function renderGameScreen() {
   const btnZoomIn = document.getElementById('btn-zoom-in');
   const btnZoomOut = document.getElementById('btn-zoom-out');
   const btnZoomFit = document.getElementById('btn-zoom-fit');
+  const mapNavigator = document.getElementById('map-navigator');
+  const mapNavigatorCanvas = document.getElementById('map-navigator-canvas');
+  const mapZoomValue = document.getElementById('map-zoom-value');
   const btnClear = document.getElementById('btn-clear-selection');
   const btnBad = document.getElementById('btn-route-bad');
   const btnGood = document.getElementById('btn-route-good');
@@ -153,20 +157,27 @@ function renderGameScreen() {
   const updateViewUI = (view) => {
     btnZoomIn.disabled = !view.canZoomIn;
     btnZoomOut.disabled = !view.canZoomOut;
+    mapNavigator.classList.toggle('is-visible', !view.isOverview);
+    mapNavigator.setAttribute('aria-hidden', String(view.isOverview));
+    mapNavigator.tabIndex = view.isOverview ? -1 : 0;
+    mapZoomValue.textContent = `${Math.round(view.zoom * 100)}%`;
+    mapTip.classList.toggle('is-viewing', !view.isOverview);
   };
 
   map = new TopologyMap(canvas, {
     onSelectionChange: updateSelectionUI,
     onViewChange: updateViewUI,
+    navigatorCanvas: mapNavigatorCanvas,
   });
 
   map.setLevel(level);
   map.startAnimation();
 
 
-  btnZoomIn.addEventListener('click', () => map.zoomBy(1.6));
-  btnZoomOut.addEventListener('click', () => map.zoomBy(1 / 1.6));
-  btnZoomFit.addEventListener('click', () => map.fit());
+  btnZoomIn.addEventListener('click', () => map.zoomIn());
+  btnZoomOut.addEventListener('click', () => map.zoomOut());
+  btnZoomFit.addEventListener('click', () => map.fitAnimated());
+  mapNavigator.addEventListener('click', () => map.fitAnimated());
   btnClear.addEventListener('click', () => map.clearSelection());
 
   const setRoute = (kind) => {
@@ -217,12 +228,12 @@ function renderGameScreen() {
     const selection = map.getSelection();
     const isCorrect = await checkSolution(level, selection);
 
-    // Сначала показываем, что происходит на складе, и только потом вердикт:
-    // Гоша подходит к выбранному шкафу и либо проходит, либо упирается в него.
+    // Сначала показываем проверку на складе и только потом открываем подробный
+    // вердикт: Гоша подходит к выбранному шкафу и сверяет его настройку.
     btnVerify.disabled = true;
     setRoute('good');
-    // Сигнал звучит в момент, когда Гоша упирается или проходит, а не после
-    // всей сцены — иначе он расходится с картинкой.
+    // Сигнал звучит вместе с короткой репликой о результате проверки, а не
+    // после всей сцены — иначе он расходится с картинкой.
     await map.playCheck(selection[0], isCorrect, () => {
       if (isCorrect) sound.success();
       else sound.fail();
@@ -259,7 +270,7 @@ async function checkSolution(level, selectedIndices) {
 }
 
 function showResult(modal, level, isCorrect) {
-  const icon = document.getElementById('modal-icon');
+  const statusIcon = document.getElementById('modal-icon');
   const kicker = document.getElementById('modal-kicker');
   const title = document.getElementById('modal-title');
   const text = document.getElementById('modal-text');
@@ -271,7 +282,7 @@ function showResult(modal, level, isCorrect) {
   const isLast = currentLevelIndex === levels.length - 1;
 
   if (isCorrect) {
-    icon.textContent = '✓';
+    statusIcon.innerHTML = uiIcon('check');
     kicker.textContent = 'Проверка пройдена';
     title.textContent = 'Маршрут исправлен';
     text.textContent = level.successMessage;
@@ -287,7 +298,7 @@ function showResult(modal, level, isCorrect) {
       setTimeout(currentLevelIndex < levels.length ? renderGameScreen : renderEndScreen, 260);
     };
   } else {
-    icon.textContent = '↻';
+    statusIcon.innerHTML = uiIcon('retry');
     kicker.textContent = 'Нужна ещё проверка';
     title.textContent = 'Маршруты пока не сходятся';
     text.textContent =
@@ -404,23 +415,23 @@ function renderEditorScreen() {
       <header class="game-header">
         <div class="brand"><span class="brand-mark">route-lab</span><span class="brand-sub">конструктор</span></div>
         <div class="editor-tools">
-          <button class="btn btn-ghost btn-sm" id="ed-undo-route">Отменить точку</button>
-          <button class="btn btn-ghost btn-sm" id="ed-clear-route">Очистить маршрут</button>
-          <button class="btn btn-primary btn-sm" id="ed-export">Экспорт</button>
-          <label class="btn btn-ghost btn-sm">Импорт<input type="file" id="ed-import" accept=".json" hidden></label>
-          <button class="btn btn-ghost btn-sm" id="ed-clear">Очистить склад</button>
-          <button class="btn btn-ghost btn-sm" id="ed-exit">Выйти</button>
+          <button class="btn btn-ghost btn-sm" id="ed-undo-route">${uiIcon('undo')}Отменить точку</button>
+          <button class="btn btn-ghost btn-sm" id="ed-clear-route">${uiIcon('routeClear')}Очистить маршрут</button>
+          <button class="btn btn-primary btn-sm" id="ed-export">${uiIcon('download')}Экспорт</button>
+          <label class="btn btn-ghost btn-sm">${uiIcon('upload')}Импорт<input type="file" id="ed-import" accept=".json" hidden></label>
+          <button class="btn btn-ghost btn-sm" id="ed-clear">${uiIcon('trash')}Очистить склад</button>
+          <button class="btn btn-ghost btn-sm" id="ed-exit">${uiIcon('close')}Выйти</button>
         </div>
       </header>
 
       <div class="map-toolbar" id="brush-selector">
-        <button class="btn btn-sm is-active" data-brush="bottom">⬇ Вниз</button>
-        <button class="btn btn-sm" data-brush="left">⬅ Влево</button>
-        <button class="btn btn-sm" data-brush="top">⬆ Вверх</button>
-        <button class="btn btn-sm" data-brush="right">➡ Вправо</button>
-        <button class="btn btn-sm" data-brush="none">⬛ Глухой</button>
-        <button class="btn btn-sm btn-danger" data-brush="delete">✕ Ластик</button>
-        <button class="btn btn-sm btn-accent" data-brush="route-dot">● Точка пути</button>
+        <button class="btn btn-sm is-active" data-brush="bottom">${uiIcon('arrowDown')}Вниз</button>
+        <button class="btn btn-sm" data-brush="left">${uiIcon('arrowLeft')}Влево</button>
+        <button class="btn btn-sm" data-brush="top">${uiIcon('arrowUp')}Вверх</button>
+        <button class="btn btn-sm" data-brush="right">${uiIcon('arrowRight')}Вправо</button>
+        <button class="btn btn-sm" data-brush="none">${uiIcon('block')}Глухой</button>
+        <button class="btn btn-sm btn-danger" data-brush="delete">${uiIcon('eraser')}Ластик</button>
+        <button class="btn btn-sm btn-accent" data-brush="route-dot">${uiIcon('waypoint')}Точка пути</button>
       </div>
 
       <div class="map-stage">

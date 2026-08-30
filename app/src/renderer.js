@@ -22,8 +22,8 @@ const Y_SQUEEZE = 1;
 const WORLD_W = 100;
 const WORLD_H = 100;
 
-const MIN_SCALE_FACTOR = 0.9; // относительно масштаба «вписать в экран»
 const MAX_SCALE = 60;
+const OVERVIEW_EPSILON = 1.025;
 
 // Ниже этого экранного размера шкафа детали (полоса подхода) не рисуем —
 // они всё равно не читаются, а времени отнимают много.
@@ -258,7 +258,7 @@ class SpatialGrid {
 export class TopologyMap {
   /**
    * @param {HTMLCanvasElement} canvas
-   * @param {{onSelectionChange?: (set: Set<number>) => void, onViewChange?: (state: object) => void}} hooks
+   * @param {{onSelectionChange?: (set: Set<number>) => void, onViewChange?: (state: object) => void, navigatorCanvas?: HTMLCanvasElement}} hooks
    */
   constructor(canvas, hooks = {}) {
     this.canvas = canvas;
@@ -273,6 +273,8 @@ export class TopologyMap {
     this.pickSet = new Set();
     this.selected = new Set();
     this.hovered = -1;
+    this._lastSelected = -1;
+    this._lastFocus = null;
 
     this.routes = { bad: [], good: [] };
     this.activeRoute = 'bad';
@@ -295,6 +297,14 @@ export class TopologyMap {
 
     this._pointers = new Map();
     this._gesture = null;
+    this._cameraTween = 0;
+
+    // Маленький обзор склада строится один раз, а при движении камеры поверх
+    // него обновляется только рамка видимой области.
+    this.navigatorCanvas = hooks.navigatorCanvas || null;
+    this._navigatorBase = null;
+    this._navigatorBaseDirty = true;
+    this._navigatorDirty = true;
 
     this.gosha = new Gosha();
     this._lastTick = 0;
@@ -325,6 +335,10 @@ export class TopologyMap {
 
     this.selected = new Set();
     this.hovered = -1;
+    this._lastSelected = -1;
+    this._lastFocus = null;
+    this._navigatorBaseDirty = true;
+    this._navigatorDirty = true;
     this.gosha.idle(this.routes[this.activeRoute]);
 
     this.resize();
@@ -335,18 +349,20 @@ export class TopologyMap {
   setActiveRoute(kind) {
     this.activeRoute = kind;
     if (this.gosha.phase === 'idle') this.gosha.idle(this.routes[kind]);
+    this._navigatorBaseDirty = true;
+    this._navigatorDirty = true;
     this.requestDraw();
   }
 
   /**
    * Сцена проверки: камера наводится на выбранный шкаф, Гоша подходит к нему
-   * по маршруту и либо идёт дальше, либо упирается.
+   * по маршруту и сообщает результат сверки настройки.
    * @param {number} cabIndex выбранный шкаф
-   * @param {boolean} pass пройдёт ли он
-   * @param {() => void} [onOutcome] в момент упора или прохода, для звука
+   * @param {boolean} correct верно ли игрок определил ошибку
+   * @param {() => void} [onOutcome] в момент появления результата, для звука
    * @returns {Promise<void>} завершается, когда сцена доиграна
    */
-  playCheck(cabIndex, pass, onOutcome) {
+  playCheck(cabIndex, correct, onOutcome) {
     const cab = this.cabinets[cabIndex];
     const pts = this.routes.good.length > 1 ? this.routes.good : this.routes.bad;
     if (!cab || pts.length < 2) return Promise.resolve();
@@ -359,7 +375,7 @@ export class TopologyMap {
     return new Promise((resolve) => {
       // По завершении Гоша остаётся стоять у шкафа: idle() вернул бы его в
       // начало маршрута, за пределы кадра.
-      this.gosha.start(path, targetDist, pass, onOutcome, resolve);
+      this.gosha.start(path, targetDist, correct, onOutcome, resolve);
       this.startAnimation();
     });
   }
@@ -375,14 +391,24 @@ export class TopologyMap {
   clearSelection() {
     if (this.selected.size === 0) return;
     this.selected.clear();
+    this._lastSelected = -1;
     this._emitSelection();
     this.requestDraw();
   }
 
   toggleCabinet(idx) {
     if (idx < 0) return;
-    if (this.selected.has(idx)) this.selected.delete(idx);
-    else this.selected.add(idx);
+    if (this.selected.has(idx)) {
+      this.selected.delete(idx);
+      if (this._lastSelected === idx) {
+        this._lastSelected = Array.from(this.selected).at(-1) ?? -1;
+      }
+    } else {
+      this.selected.add(idx);
+      this._lastSelected = idx;
+      const c = this.cabinets[idx];
+      if (c) this._lastFocus = { x: c.x + c.w / 2, y: c.y + c.h / 2 };
+    }
     this._emitSelection();
     this.requestDraw();
   }
@@ -392,6 +418,7 @@ export class TopologyMap {
   }
 
   _emitSelection() {
+    this._navigatorDirty = true;
     if (this.hooks.onSelectionChange) this.hooks.onSelectionChange(this.selected);
   }
 
@@ -401,15 +428,24 @@ export class TopologyMap {
     const rect = this.canvas.getBoundingClientRect();
     if (rect.width === 0 || rect.height === 0) return;
 
+    const wasOverview = this.scale <= this.minScale * OVERVIEW_EPSILON;
+
     this.dpr = Math.min(window.devicePixelRatio || 1, 2);
     this.width = rect.width;
     this.height = rect.height;
     this.canvas.width = Math.round(rect.width * this.dpr);
     this.canvas.height = Math.round(rect.height * this.dpr);
 
-    this.minScale = this._fitScale() * MIN_SCALE_FACTOR;
-    if (this.scale < this.minScale) this.scale = this.minScale;
-    this._clampOrigin();
+    // Уменьшать склад меньше режима «весь склад» нет смысла: это только
+    // добавляет пустые поля и делает шкафы труднее для выбора.
+    this.minScale = this._fitScale();
+    if (wasOverview) this._setFitView();
+    else {
+      if (this.scale < this.minScale) this.scale = this.minScale;
+      this._clampOrigin();
+    }
+    this._navigatorDirty = true;
+    this._emitView();
     this.requestDraw();
   }
 
@@ -418,13 +454,26 @@ export class TopologyMap {
     return Math.min(this.width / WORLD_W, this.height / (WORLD_H * Y_SQUEEZE));
   }
 
-  fit() {
+  _setFitView() {
     this.scale = this._fitScale();
-    this.minScale = this.scale * MIN_SCALE_FACTOR;
+    this.minScale = this.scale;
     this.originX = (this.width - WORLD_W * this.scale) / 2;
     this.originY = (this.height - WORLD_H * Y_SQUEEZE * this.scale) / 2;
+  }
+
+  fit() {
+    this._cameraTween++;
+    this._setFitView();
+    this._navigatorDirty = true;
     this._emitView();
     this.requestDraw();
+  }
+
+  /** Плавный возврат к обзору сохраняет пространственный контекст. */
+  fitAnimated() {
+    const targetScale = this._fitScale();
+    this.minScale = targetScale;
+    this._animateTo(targetScale, WORLD_W / 2, WORLD_H / 2);
   }
 
   /** Плавно приблизиться к прямоугольнику мира (используется подсказкой). */
@@ -439,12 +488,60 @@ export class TopologyMap {
     this._animateTo(targetScale, cx, cy);
   }
 
+  /**
+   * Кнопка «+» наводится на последний выбранный шкаф. Если выбора ещё нет,
+   * берём ближайшую к центру точку маршрута, а не пустой центр склада.
+   */
+  zoomIn(factor = 1.6) {
+    const next = Math.max(this.minScale, Math.min(MAX_SCALE, this.scale * factor));
+    if (next === this.scale) return;
+
+    let focus = null;
+    if (this._lastSelected >= 0 && this.selected.has(this._lastSelected)) {
+      const c = this.cabinets[this._lastSelected];
+      if (c) focus = { x: c.x + c.w / 2, y: c.y + c.h / 2 };
+    }
+    if (!focus && this._lastFocus) focus = this._lastFocus;
+
+    if (!focus) {
+      const pts = this.routes[this.activeRoute] || [];
+      const center = this._screenCenterWorld();
+      let bestDist = Infinity;
+      for (const p of pts) {
+        const d = (p.x - center.x) ** 2 + (p.y - center.y) ** 2;
+        if (d < bestDist) {
+          bestDist = d;
+          focus = p;
+        }
+      }
+    }
+
+    if (focus) this._animateTo(next, focus.x, focus.y);
+    else this.zoomBy(factor);
+  }
+
+  zoomOut(factor = 1.6) {
+    const next = Math.max(this.minScale, Math.min(MAX_SCALE, this.scale / factor));
+    if (next === this.scale) return;
+    const center = this._screenCenterWorld();
+    this._animateTo(next, center.x, center.y);
+  }
+
+  _screenCenterWorld() {
+    return {
+      x: (this.width / 2 - this.originX) / this.scale,
+      y: (this.height / 2 - this.originY) / (this.scale * Y_SQUEEZE),
+    };
+  }
+
   zoomBy(factor, anchorX, anchorY) {
     const ax = anchorX === undefined ? this.width / 2 : anchorX;
     const ay = anchorY === undefined ? this.height / 2 : anchorY;
 
     const next = Math.max(this.minScale, Math.min(MAX_SCALE, this.scale * factor));
     if (next === this.scale) return;
+
+    this._cameraTween++;
 
     // Точка мира под якорем должна остаться на месте.
     const wx = (ax - this.originX) / this.scale;
@@ -455,6 +552,7 @@ export class TopologyMap {
     this.originY = ay - wy * this.scale * Y_SQUEEZE;
 
     this._clampOrigin();
+    this._navigatorDirty = true;
     this._emitView();
     this.requestDraw();
   }
@@ -470,18 +568,22 @@ export class TopologyMap {
 
     const t0 = performance.now();
     const dur = 420;
+    const tween = ++this._cameraTween;
 
     const step = (now) => {
-      if (this._destroyed) return;
+      if (this._destroyed || tween !== this._cameraTween) return;
       const t = Math.min(1, (now - t0) / dur);
       const e = 1 - Math.pow(1 - t, 3);
       this.scale = startScale + (endScale - startScale) * e;
       this.originX = startX + (endX - startX) * e;
       this.originY = startY + (endY - startY) * e;
       this._clampOrigin();
+      this._navigatorDirty = true;
       this.draw();
+      // Процент и мини-карта следуют за камерой во время перелёта, а не
+      // догоняют её только в самом конце анимации.
+      this._emitView();
       if (t < 1) requestAnimationFrame(step);
-      else this._emitView();
     };
 
     requestAnimationFrame(step);
@@ -491,11 +593,17 @@ export class TopologyMap {
   _clampOrigin() {
     const w = WORLD_W * this.scale;
     const h = WORLD_H * Y_SQUEEZE * this.scale;
-    const marginX = Math.min(this.width * 0.5, w * 0.5);
-    const marginY = Math.min(this.height * 0.5, h * 0.5);
 
-    this.originX = Math.min(this.width - marginX, Math.max(marginX - w, this.originX));
-    this.originY = Math.min(this.height - marginY, Math.max(marginY - h, this.originY));
+    const clampAxis = (viewport, content, origin) => {
+      if (content <= viewport) return (viewport - content) / 2;
+      // Небольшой «мягкий край» показывает, что карта закончилась, но не
+      // позволяет оставить на экране полупустой кадр и потерять склад.
+      const overscroll = Math.min(28, viewport * 0.055);
+      return Math.min(overscroll, Math.max(viewport - content - overscroll, origin));
+    };
+
+    this.originX = clampAxis(this.width, w, this.originX);
+    this.originY = clampAxis(this.height, h, this.originY);
   }
 
   _emitView() {
@@ -504,6 +612,8 @@ export class TopologyMap {
         scale: this.scale,
         minScale: this.minScale,
         maxScale: MAX_SCALE,
+        zoom: this.minScale > 0 ? this.scale / this.minScale : 1,
+        isOverview: this.scale <= this.minScale * OVERVIEW_EPSILON,
         canZoomIn: this.scale < MAX_SCALE - 1e-6,
         canZoomOut: this.scale > this.minScale + 1e-6,
       });
@@ -528,6 +638,8 @@ export class TopologyMap {
     const c = this.canvas;
 
     c.addEventListener('pointerdown', (e) => {
+      // Ручной жест всегда важнее незаконченного программного перелёта.
+      this._cameraTween++;
       c.style.cursor = 'grabbing';
       c.setPointerCapture(e.pointerId);
       this._pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
@@ -540,6 +652,7 @@ export class TopologyMap {
           lastX: e.clientX,
           lastY: e.clientY,
           startTime: performance.now(),
+          pointerType: e.pointerType,
           moved: 0,
         };
       } else if (this._pointers.size === 2) {
@@ -569,10 +682,13 @@ export class TopologyMap {
         const dy = e.clientY - g.lastY;
         g.lastX = e.clientX;
         g.lastY = e.clientY;
-        g.moved += Math.abs(dx) + Math.abs(dy);
+        // Считаем реальное удаление от точки старта, а не сумму микродрожаний
+        // пальца: иначе обычный тап легко превращался в панорамирование.
+        g.moved = Math.max(g.moved, Math.hypot(e.clientX - g.startX, e.clientY - g.startY));
         this.originX += dx;
         this.originY += dy;
         this._clampOrigin();
+        this._navigatorDirty = true;
         this.requestDraw();
       } else if (g.mode === 'pinch' && this._pointers.size >= 2) {
         const [a, b] = Array.from(this._pointers.values());
@@ -593,6 +709,7 @@ export class TopologyMap {
           this.zoomBy(factor, midX - rect.left, midY - rect.top);
         } else {
           this._clampOrigin();
+          this._navigatorDirty = true;
           this.requestDraw();
         }
       }
@@ -604,8 +721,10 @@ export class TopologyMap {
 
       if (g && g.mode === 'pan' && this._pointers.size === 0) {
         const dt = performance.now() - g.startTime;
-        // Короткое касание почти без смещения — это тап по шкафу.
-        if (g.moved < 10 && dt < 600) {
+        const tapTolerance = g.pointerType === 'touch' ? 16 : 8;
+        // На телефоне допускаем естественное дрожание пальца, но настоящее
+        // перетаскивание по-прежнему никогда не выбирает шкаф случайно.
+        if (g.moved < tapTolerance && dt < 650) {
           this._handleTap(e.clientX, e.clientY);
         }
       }
@@ -623,6 +742,7 @@ export class TopologyMap {
           lastX: only.x,
           lastY: only.y,
           startTime: performance.now(),
+          pointerType: e.pointerType,
           moved: 999,
         };
       }
@@ -656,14 +776,14 @@ export class TopologyMap {
       switch (e.key) {
         case '+':
         case '=':
-          this.zoomBy(1.45);
+          this.zoomIn(1.45);
           break;
         case '-':
         case '_':
-          this.zoomBy(1 / 1.45);
+          this.zoomOut(1.45);
           break;
         case '0':
-          this.fit();
+          this.fitAnimated();
           break;
         case 'ArrowLeft':
           this.originX += pan;
@@ -687,6 +807,7 @@ export class TopologyMap {
       if (!handled) return;
       e.preventDefault();
       this._clampOrigin();
+      this._navigatorDirty = true;
       this.requestDraw();
     });
 
@@ -793,6 +914,113 @@ export class TopologyMap {
     this._drawHoverMarker(ctx, ox, oy, s, sy);
     this._drawSelectionMarkers(ctx, ox, oy, s, sy);
     this.gosha.draw(ctx, ox, oy, s, sy, performance.now());
+
+    if (this._navigatorDirty) {
+      this._drawNavigator();
+      this._navigatorDirty = false;
+    }
+  }
+
+  /**
+   * Компактный навигатор появляется только после приближения. Статический
+   * план кэшируется, поэтому анимация маршрута не заставляет перерисовывать
+   * тысячи шкафов во втором canvas на каждом кадре.
+   */
+  _drawNavigator() {
+    const canvas = this.navigatorCanvas;
+    if (!canvas || !this.level) return;
+
+    const width = canvas.width;
+    const height = canvas.height;
+    const pad = 8;
+    const navScale = Math.min(
+      (width - pad * 2) / WORLD_W,
+      (height - pad * 2) / (WORLD_H * Y_SQUEEZE)
+    );
+    const navX = (width - WORLD_W * navScale) / 2;
+    const navY = (height - WORLD_H * Y_SQUEEZE * navScale) / 2;
+
+    if (!this._navigatorBase || this._navigatorBaseDirty ||
+        this._navigatorBase.width !== width || this._navigatorBase.height !== height) {
+      const base = document.createElement('canvas');
+      base.width = width;
+      base.height = height;
+      const g = base.getContext('2d');
+
+      g.fillStyle = '#07101d';
+      g.fillRect(0, 0, width, height);
+      g.fillStyle = '#0d1c31';
+      g.fillRect(navX, navY, WORLD_W * navScale, WORLD_H * Y_SQUEEZE * navScale);
+
+      // На мини-карте важна структура рядов, а не детали отдельных полок.
+      for (let i = 0; i < this.cabinets.length; i++) {
+        const c = this.cabinets[i];
+        if (this.pickSet.has(i)) g.fillStyle = '#35b977';
+        else if (c.facing === 'none') g.fillStyle = '#40516d';
+        else g.fillStyle = '#8499b8';
+        g.fillRect(
+          navX + c.x * navScale,
+          navY + c.y * navScale * Y_SQUEEZE,
+          Math.max(1, c.w * navScale),
+          Math.max(1, c.h * navScale * Y_SQUEEZE)
+        );
+      }
+
+      const route = this.routes[this.activeRoute] || [];
+      if (route.length > 1) {
+        g.strokeStyle = this.activeRoute === 'good' ? COLORS.routeGood : COLORS.routeBad;
+        g.lineWidth = 2.4;
+        g.lineJoin = 'round';
+        g.lineCap = 'round';
+        g.beginPath();
+        g.moveTo(navX + route[0].x * navScale, navY + route[0].y * navScale * Y_SQUEEZE);
+        for (let i = 1; i < route.length; i++) {
+          g.lineTo(navX + route[i].x * navScale, navY + route[i].y * navScale * Y_SQUEEZE);
+        }
+        g.stroke();
+      }
+
+      g.strokeStyle = 'rgba(147,180,230,0.34)';
+      g.lineWidth = 1;
+      g.strokeRect(navX + 0.5, navY + 0.5, WORLD_W * navScale - 1, WORLD_H * navScale - 1);
+
+      this._navigatorBase = base;
+      this._navigatorBaseDirty = false;
+    }
+
+    const ctx = canvas.getContext('2d');
+    ctx.clearRect(0, 0, width, height);
+    ctx.drawImage(this._navigatorBase, 0, 0);
+
+    // Выбранные шкафы поверх кэша остаются видимы красными точками.
+    ctx.fillStyle = COLORS.selected;
+    for (const i of this.selected) {
+      const c = this.cabinets[i];
+      if (!c) continue;
+      ctx.fillRect(
+        navX + (c.x + c.w / 2) * navScale - 1.6,
+        navY + (c.y + c.h / 2) * navScale * Y_SQUEEZE - 1.6,
+        3.2,
+        3.2
+      );
+    }
+
+    const viewX0 = Math.max(0, -this.originX / this.scale);
+    const viewY0 = Math.max(0, -this.originY / (this.scale * Y_SQUEEZE));
+    const viewX1 = Math.min(WORLD_W, (this.width - this.originX) / this.scale);
+    const viewY1 = Math.min(WORLD_H, (this.height - this.originY) / (this.scale * Y_SQUEEZE));
+
+    if (viewX1 > viewX0 && viewY1 > viewY0) {
+      const x = navX + viewX0 * navScale;
+      const y = navY + viewY0 * navScale * Y_SQUEEZE;
+      const w = (viewX1 - viewX0) * navScale;
+      const h = (viewY1 - viewY0) * navScale * Y_SQUEEZE;
+      ctx.fillStyle = 'rgba(91,148,255,0.14)';
+      ctx.strokeStyle = '#8bb5ff';
+      ctx.lineWidth = 2;
+      ctx.fillRect(x, y, w, h);
+      ctx.strokeRect(x + 1, y + 1, Math.max(0, w - 2), Math.max(0, h - 2));
+    }
   }
 
   _drawBounds(ctx, ox, oy, s, sy) {
@@ -1554,6 +1782,7 @@ export class TopologyMap {
 
   destroy() {
     this._destroyed = true;
+    this._cameraTween++;
     this.stopAnimation();
     if (this._frame) cancelAnimationFrame(this._frame);
     if (this._ro) this._ro.disconnect();

@@ -1,6 +1,7 @@
 /**
- * Гоша-дежурный: подходит к выбранному шкафу и либо проходит дальше, либо
- * упирается в него.
+ * Гоша-дежурный: подходит к выбранному шкафу и сверяет его настройку с
+ * маршрутом. Сцена показывает результат проверки, а не физическое
+ * столкновение со стеллажом.
  *
  * Корпус перерисован по Гоше из соседней Pac-Man игры: тот же объёмный стиль,
  * но без гарнитуры и бейджа, в рабочем комбинезоне и сигнальном жилете.
@@ -13,6 +14,7 @@
  */
 
 import bodyUrl from './assets/gosha/gosha-worker-body.png';
+import { drawStatusIcon } from './icons.js';
 
 // Подход к шкафу — буквально несколько шагов: камера уже наведена, длинный
 // разбег только тянул бы время.
@@ -20,12 +22,11 @@ const APPROACH = 11;
 const STRIDE = 3.2;      // длина шага в единицах мира, отсюда ~3.5 шага
 
 const APPROACH_MS = 1500; // неспешно, чтобы было видно сами шаги
-const THROUGH_MS = 1100;  // проход дальше при верном ответе
-const BUMP_MS = 1300;     // упор при неверном — с репликой, её надо прочесть
+const RESULT_MS = 1400;   // пауза у шкафа: реплику должно быть легко прочесть
 
 const SAY = {
-  pass: 'Путь свободен!',
-  block: 'Тут не пройти',
+  correct: 'Ошибка найдена!',
+  retry: 'Проверю ещё раз',
 };
 
 const LEG_RATIO = 0.22;
@@ -62,13 +63,13 @@ export class Gosha {
     this.total = 0;
 
     this.visible = false;
-    this.phase = null;   // 'run' | 'through' | 'bump'
+    this.phase = null;   // 'run' | 'result' | 'idle'
     this.dist = 0;
     this.from = 0;
     this.to = 0;
     this.startedAt = 0;
     this.duration = 0;
-    this.pass = false;
+    this.correct = false;
     this.onOutcome = null;
     this.onDone = null;
   }
@@ -93,14 +94,14 @@ export class Gosha {
   }
 
   /**
-   * Запускает проход к точке маршрута.
+   * Запускает проверку выбранного шкафа.
    * @param {{x:number,y:number}[]} points маршрут
    * @param {number} targetDist расстояние по маршруту до выбранного шкафа
-   * @param {boolean} pass пройдёт ли он дальше
-   * @param {() => void} [onOutcome] в момент упора или прохода
+   * @param {boolean} correct верно ли игрок определил проблемный шкаф
+   * @param {() => void} [onOutcome] в момент появления результата
    * @param {() => void} onDone вызывается, когда сцена доиграна
    */
-  start(points, targetDist, pass, onOutcome, onDone) {
+  start(points, targetDist, correct, onOutcome, onDone) {
     this._measure(points);
     if (this.total === 0) {
       onDone?.();
@@ -110,7 +111,7 @@ export class Gosha {
     this.to = Math.max(0, Math.min(targetDist, this.total));
     this.from = Math.max(0, this.to - APPROACH);
     this.dist = this.from;
-    this.pass = pass;
+    this.correct = correct;
     this.onOutcome = onOutcome;
     this.onDone = onDone;
     this.phase = 'run';
@@ -166,15 +167,8 @@ export class Gosha {
       const e = 1 - Math.pow(1 - t, 1.5); // чуть притормаживает у шкафа
       this.dist = this.from + (this.to - this.from) * e;
       if (t >= 1) {
-        if (this.pass) {
-          this.phase = 'through';
-          this.from = this.to;
-          this.to = Math.min(this.total, this.to + APPROACH);
-          this.duration = THROUGH_MS;
-        } else {
-          this.phase = 'bump';
-          this.duration = BUMP_MS;
-        }
+        this.phase = 'result';
+        this.duration = RESULT_MS;
         this.startedAt = now;
         const outcome = this.onOutcome;
         this.onOutcome = null;
@@ -183,13 +177,7 @@ export class Gosha {
       return;
     }
 
-    if (this.phase === 'through') {
-      this.dist = this.from + (this.to - this.from) * t;
-      if (t >= 1) this._finish();
-      return;
-    }
-
-    if (this.phase === 'bump' && t >= 1) this._finish();
+    if (this.phase === 'result' && t >= 1) this._finish();
   }
 
   /**
@@ -216,15 +204,9 @@ export class Gosha {
     let px = ox + at.x * s;
     const py = oy + at.y * sy;
 
-    const bumping = this.phase === 'bump';
-    if (bumping) {
-      const k = 1 - (now - this.startedAt) / this.duration;
-      px += Math.sin(now / 20) * 4 * Math.max(0, k);
-    }
-
     // Фаза шага и оборот колёс привязаны к пройденному пути. При остановке у
     // шкафа ни ноги, ни рохля не продолжают жить своей жизнью.
-    const walking = this.phase === 'run' || this.phase === 'through';
+    const walking = this.phase === 'run';
     const standing = !walking;
     const stepPhase = (this.dist / STRIDE) * Math.PI * 2;
     const wheelPhase = this.dist * 3.4;
@@ -241,10 +223,20 @@ export class Gosha {
 
     ctx.restore();
 
-    if (this.phase === 'bump' || this.phase === 'through') {
+    if (this.phase === 'result') {
       const t = (now - this.startedAt) / this.duration;
-      const alpha = Math.min(1, t * 5) * Math.min(1, (1 - t) * 6 + 0.35);
-      this._drawBubble(ctx, px, py - H * 1.05, H, this.pass ? SAY.pass : SAY.block, this.pass, alpha);
+      // Карточка должна читаться всё время паузы. Раньше затухание начиналось
+      // слишком рано, и над светлыми шкафами текст выглядел полупрозрачным.
+      const alpha = Math.min(1, 0.78 + t * 3);
+      this._drawBubble(
+        ctx,
+        px,
+        py - H * 1.05,
+        H,
+        this.correct ? SAY.correct : SAY.retry,
+        this.correct,
+        alpha
+      );
     }
   }
 
@@ -267,40 +259,93 @@ export class Gosha {
     ctx.restore();
   }
 
-  /** Реплика Гоши: светлое облачко с хвостиком, направленным на него. */
+  /**
+   * Реплика Гоши — компактная статусная карточка в стиле интерфейса игры.
+   * Хвост входит в единый контур: нижняя граница не проходит сквозь него и
+   * больше не образует две наложенные линии.
+   */
   _drawBubble(ctx, px, py, H, text, good, alpha) {
-    const fs = Math.max(11, H * 0.16);
+    const fs = Math.max(11, H * 0.15);
     ctx.save();
     ctx.globalAlpha = Math.max(0, Math.min(1, alpha));
-    ctx.font = `600 ${fs}px Inter, system-ui, sans-serif`;
-    ctx.textAlign = 'center';
+    ctx.font = `700 ${fs}px Inter, system-ui, sans-serif`;
+    ctx.textAlign = 'left';
     ctx.textBaseline = 'middle';
 
-    const padX = fs * 0.75;
-    const padY = fs * 0.5;
-    const w = ctx.measureText(text).width + padX * 2;
-    const h = fs + padY * 2;
-    const x = px - w / 2;
-    const y = py - h;
-    const r = Math.min(h / 2, fs * 0.7);
-    const tail = fs * 0.45;
+    const iconR = fs * 0.62;
+    const padX = fs * 0.68;
+    const gap = fs * 0.55;
+    const w = ctx.measureText(text).width + padX * 2 + iconR * 2 + gap;
+    const h = Math.max(32, fs * 2.25);
+    const r = Math.min(11, h * 0.34);
+    const tailHalf = Math.max(4, fs * 0.38);
+    const tailH = Math.max(6, fs * 0.5);
 
+    // Canvas хранит физические пиксели, а сцена рисуется в CSS-пикселях.
+    // Ограничение по ширине не даёт карточке обрезаться у края карты.
+    const transformScale = Math.abs(ctx.getTransform().a) || 1;
+    const viewW = ctx.canvas.width / transformScale;
+    const margin = 8;
+    const centerX = Math.max(w / 2 + margin, Math.min(viewW - w / 2 - margin, px));
+    const x = centerX - w / 2;
+    const y = Math.max(margin, py - h - tailH);
+    const bottom = y + h;
+    const tailCenter = Math.max(
+      x + r + tailHalf,
+      Math.min(x + w - r - tailHalf, px)
+    );
+
+    // Скруглённая карточка и хвост — один путь без внутренней границы.
     ctx.beginPath();
-    if (ctx.roundRect) ctx.roundRect(x, y, w, h, r);
-    else ctx.rect(x, y, w, h);
-    ctx.moveTo(px - tail, y + h);
-    ctx.lineTo(px, y + h + tail);
-    ctx.lineTo(px + tail, y + h);
+    ctx.moveTo(x + r, y);
+    ctx.lineTo(x + w - r, y);
+    ctx.quadraticCurveTo(x + w, y, x + w, y + r);
+    ctx.lineTo(x + w, bottom - r);
+    ctx.quadraticCurveTo(x + w, bottom, x + w - r, bottom);
+    ctx.lineTo(tailCenter + tailHalf, bottom);
+    ctx.lineTo(px, bottom + tailH);
+    ctx.lineTo(tailCenter - tailHalf, bottom);
+    ctx.lineTo(x + r, bottom);
+    ctx.quadraticCurveTo(x, bottom, x, bottom - r);
+    ctx.lineTo(x, y + r);
+    ctx.quadraticCurveTo(x, y, x + r, y);
     ctx.closePath();
 
-    ctx.fillStyle = '#f2f6fd';
+    const accent = good ? '#36d98b' : '#f5a524';
+    ctx.fillStyle = '#101d31';
+    ctx.shadowColor = 'rgba(0,0,0,0.48)';
+    ctx.shadowBlur = 14;
+    ctx.shadowOffsetY = 5;
     ctx.fill();
-    ctx.strokeStyle = good ? '#22a457' : '#e11d48';
-    ctx.lineWidth = 2;
+    ctx.shadowColor = 'transparent';
+    ctx.shadowBlur = 0;
+    ctx.shadowOffsetY = 0;
+    ctx.strokeStyle = good ? 'rgba(54,217,139,0.82)' : 'rgba(245,165,36,0.82)';
+    ctx.lineWidth = 1.5;
     ctx.stroke();
 
-    ctx.fillStyle = good ? '#14532d' : '#7f1020';
-    ctx.fillText(text, px, y + h / 2);
+    const iconX = x + padX + iconR;
+    const centerY = y + h / 2;
+    ctx.fillStyle = accent;
+    ctx.beginPath();
+    ctx.arc(iconX, centerY, iconR, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Ровно тот же вектор используется в модальном окне результата.
+    ctx.strokeStyle = '#08111f';
+    drawStatusIcon(
+      ctx,
+      good ? 'check' : 'retry',
+      iconX,
+      centerY,
+      iconR * 1.48,
+      Math.max(1.5, fs * 0.13)
+    );
+
+    ctx.fillStyle = '#edf4ff';
+    ctx.font = `700 ${fs}px Inter, system-ui, sans-serif`;
+    ctx.textAlign = 'left';
+    ctx.fillText(text, iconX + iconR + gap, centerY);
     ctx.restore();
   }
 

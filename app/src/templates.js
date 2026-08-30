@@ -233,6 +233,19 @@ export function gameScreen({ level, levelIndex, levelCount }) {
             <span>Нажмите на шкаф, чтобы отметить его</span>
           </div>
 
+          <button
+            class="map-navigator"
+            id="map-navigator"
+            type="button"
+            aria-label="Вернуться к обзору всего склада"
+          >
+            <canvas class="map-navigator-canvas" id="map-navigator-canvas" width="216" height="144" aria-hidden="true"></canvas>
+            <span class="map-navigator-caption">
+              <b>Весь склад</b>
+              <span id="map-zoom-value">100%</span>
+            </span>
+          </button>
+
           <div class="map-controls">
             <button class="icon-btn map-ctl" id="btn-zoom-in" title="Приблизить" aria-label="Приблизить">${icon('plus')}</button>
             <button class="icon-btn map-ctl" id="btn-zoom-out" title="Отдалить" aria-label="Отдалить">${icon('minus')}</button>

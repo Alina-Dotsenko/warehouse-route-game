@@ -2372,6 +2372,11 @@ summary::-webkit-details-marker {
   transform: translateY(-6px);
 }
 
+.map-tip.is-viewing {
+  opacity: 0;
+  transform: translateY(-6px);
+}
+
 .map-tip-pulse {
   width: 9px;
   height: 9px;
@@ -2384,6 +2389,73 @@ summary::-webkit-details-marker {
 
 @keyframes map-tip-pulse {
   50% { box-shadow: 0 0 0 7px rgba(121, 167, 255, 0.04), 0 0 18px rgba(121, 167, 255, 0.78); }
+}
+
+/* Навигатор виден только при увеличении: он одновременно показывает, какая
+   часть склада сейчас на экране, и служит понятной кнопкой возврата. */
+.map-navigator {
+  position: absolute;
+  z-index: 6;
+  top: 14px;
+  right: 14px;
+  width: 120px;
+  padding: 6px;
+  border: 1px solid rgba(139, 181, 255, 0.26);
+  border-radius: 14px;
+  background: rgba(8, 17, 30, 0.97);
+  box-shadow: 0 14px 34px rgba(0, 0, 0, 0.44), inset 0 1px rgba(255, 255, 255, 0.045);
+  color: var(--text);
+  font: inherit;
+  cursor: pointer;
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(-7px) scale(0.97);
+  transform-origin: top right;
+  transition: opacity 0.2s, transform 0.2s, border-color 0.15s;
+}
+
+.map-navigator.is-visible {
+  opacity: 1;
+  pointer-events: auto;
+  transform: translateY(0) scale(1);
+}
+
+.map-navigator:hover {
+  border-color: rgba(139, 181, 255, 0.52);
+}
+
+.map-navigator:focus-visible {
+  outline: 2px solid var(--brand-bright);
+  outline-offset: 2px;
+}
+
+.map-navigator-canvas {
+  display: block;
+  width: 100%;
+  aspect-ratio: 3 / 2;
+  border-radius: 9px;
+  background: #07101d;
+  pointer-events: none;
+}
+
+.map-navigator-caption {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 6px 3px 1px;
+  font-size: 0.62rem;
+  line-height: 1;
+}
+
+.map-navigator-caption b {
+  color: #dbe8fb;
+  font-weight: 700;
+}
+
+.map-navigator-caption > span {
+  color: #8bb5ff;
+  font-variant-numeric: tabular-nums;
 }
 
 .map-controls {
@@ -2588,6 +2660,23 @@ summary::-webkit-details-marker {
     max-width: calc(100% - 20px);
     min-height: 34px;
     font-size: 0.71rem;
+  }
+
+  .map-navigator {
+    top: 10px;
+    right: 10px;
+    width: 100px;
+    padding: 5px;
+    border-radius: 12px;
+  }
+
+  .map-navigator-canvas {
+    border-radius: 7px;
+  }
+
+  .map-navigator-caption {
+    padding-top: 5px;
+    font-size: 0.56rem;
   }
 }
 
