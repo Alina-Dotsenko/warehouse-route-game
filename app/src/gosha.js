@@ -60,6 +60,7 @@ export class Gosha {
     this.startedAt = 0;
     this.duration = 0;
     this.pass = false;
+    this.onOutcome = null;
     this.onDone = null;
   }
 
@@ -87,9 +88,10 @@ export class Gosha {
    * @param {{x:number,y:number}[]} points маршрут
    * @param {number} targetDist расстояние по маршруту до выбранного шкафа
    * @param {boolean} pass пройдёт ли он дальше
+   * @param {() => void} [onOutcome] в момент упора или прохода
    * @param {() => void} onDone вызывается, когда сцена доиграна
    */
-  start(points, targetDist, pass, onDone) {
+  start(points, targetDist, pass, onOutcome, onDone) {
     this._measure(points);
     if (this.total === 0) {
       onDone?.();
@@ -100,6 +102,7 @@ export class Gosha {
     this.from = Math.max(0, this.to - APPROACH);
     this.dist = this.from;
     this.pass = pass;
+    this.onOutcome = onOutcome;
     this.onDone = onDone;
     this.phase = 'run';
     this.startedAt = performance.now();
@@ -164,6 +167,9 @@ export class Gosha {
           this.duration = BUMP_MS;
         }
         this.startedAt = now;
+        const outcome = this.onOutcome;
+        this.onOutcome = null;
+        outcome?.();
       }
       return;
     }

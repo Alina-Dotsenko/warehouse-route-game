@@ -2,6 +2,7 @@ import './style.css';
 import { levels, editorTemplate } from './levels.js';
 import { TopologyMap } from './renderer.js';
 import { nameScreen, startScreen, gameScreen, endScreen, plural } from './templates.js';
+import { sound } from './audio.js';
 
 const app = document.querySelector('#app');
 const isAdmin = new URLSearchParams(window.location.search).get('admin') === 'true';
@@ -13,6 +14,17 @@ let currentLevelIndex = 0;
 let map = null; // активный TopologyMap, если открыт игровой экран
 
 const getPlayer = () => localStorage.getItem(STORE_NAME) || '';
+
+// Браузер запрещает звук до действия пользователя, поэтому контекст создаём
+// на первом же клике по странице, а не при загрузке.
+document.addEventListener(
+  'pointerdown',
+  () => {
+    sound.unlock();
+    if (!sound.muted) sound.startMusic();
+  },
+  { once: true }
+);
 const getProgress = () => parseInt(localStorage.getItem(STORE_PROGRESS), 10) || 0;
 
 /** Освобождаем canvas и его слушатели перед сменой экрана. */
@@ -99,6 +111,7 @@ function renderGameScreen() {
   const btnGood = document.getElementById('btn-route-good');
   const btnHint = document.getElementById('btn-hint');
   const btnQuit = document.getElementById('btn-quit');
+  const btnSound = document.getElementById('btn-sound');
   const hintBox = document.getElementById('hint-box');
   const sheet = document.getElementById('sheet');
   const sheetToggle = document.getElementById('sheet-toggle');
@@ -178,6 +191,23 @@ function renderGameScreen() {
     }
   });
 
+  const syncSoundBtn = () => {
+    btnSound.classList.toggle('is-muted', sound.muted);
+    btnSound.setAttribute('aria-pressed', String(sound.muted));
+    const label = sound.muted ? 'Включить звук' : 'Выключить звук';
+    btnSound.title = label;
+    btnSound.setAttribute('aria-label', label);
+  };
+  syncSoundBtn();
+
+  btnSound.addEventListener('click', () => {
+    sound.unlock();
+    const muted = sound.toggleMuted();
+    if (muted) sound.stopMusic();
+    else sound.startMusic();
+    syncSoundBtn();
+  });
+
   btnQuit.addEventListener('click', () => renderStartScreen());
 
   btnVerify.addEventListener('click', async () => {
@@ -188,7 +218,12 @@ function renderGameScreen() {
     // Гоша подходит к выбранному шкафу и либо проходит, либо упирается в него.
     btnVerify.disabled = true;
     setRoute('good');
-    await map.playCheck(selection[0], isCorrect);
+    // Сигнал звучит в момент, когда Гоша упирается или проходит, а не после
+    // всей сцены — иначе он расходится с картинкой.
+    await map.playCheck(selection[0], isCorrect, () => {
+      if (isCorrect) sound.success();
+      else sound.fail();
+    });
     btnVerify.disabled = false;
 
     showResult(modal, level, isCorrect);

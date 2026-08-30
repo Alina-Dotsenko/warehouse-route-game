@@ -324,9 +324,10 @@ export class TopologyMap {
    * по маршруту и либо идёт дальше, либо упирается.
    * @param {number} cabIndex выбранный шкаф
    * @param {boolean} pass пройдёт ли он
+   * @param {() => void} [onOutcome] в момент упора или прохода, для звука
    * @returns {Promise<void>} завершается, когда сцена доиграна
    */
-  playCheck(cabIndex, pass) {
+  playCheck(cabIndex, pass, onOutcome) {
     const cab = this.cabinets[cabIndex];
     const pts = this.routes.good.length > 1 ? this.routes.good : this.routes.bad;
     if (!cab || pts.length < 2) return Promise.resolve();
@@ -337,7 +338,7 @@ export class TopologyMap {
     const { path, targetDist } = buildApproach(pts, target);
 
     return new Promise((resolve) => {
-      this.gosha.start(path, targetDist, pass, () => {
+      this.gosha.start(path, targetDist, pass, onOutcome, () => {
         this.gosha.idle(this.routes[this.activeRoute]);
         resolve();
       });

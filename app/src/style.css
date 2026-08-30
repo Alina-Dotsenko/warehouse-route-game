@@ -644,6 +644,20 @@ summary::-webkit-details-marker {
   flex-shrink: 0;
 }
 
+/* Кнопка звука несёт обе иконки, видна та, что соответствует состоянию. */
+.btn-sound .icon-sound-off,
+.btn-sound.is-muted .icon-sound-on {
+  display: none;
+}
+
+.btn-sound.is-muted .icon-sound-off {
+  display: block;
+}
+
+.btn-sound.is-muted {
+  color: var(--text-faint);
+}
+
 .segmented {
   display: flex;
   gap: 2px;
