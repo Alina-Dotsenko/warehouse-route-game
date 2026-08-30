@@ -29,40 +29,57 @@ const MAX_SCALE = 60;
 // они всё равно не читаются, а времени отнимают много.
 const DETAIL_THRESHOLD_PX = 9;
 
-// Маркеры выбранных и целевых шкафов не сжимаются меньше этого размера,
-// иначе на отдалении не видно, что именно ты выбрал.
-const MIN_MARKER_PX = 13;
+// Маркеры целевых шкафов не сжимаются меньше этого размера, иначе на
+// отдалении не видно, откуда нужно забрать товар.
 const MIN_PICK_MARKER_PX = 6;
 
 const COLORS = {
-  outside: '#070c14',
-  floor: '#132038',
-  floorLine: 'rgba(255,255,255,0.05)',
-  bounds: 'rgba(120,160,255,0.28)',
+  outside: '#040914',
+  floor: '#0b1728',
+  floorDeep: '#081220',
+  floorLight: '#10213a',
+  floorLine: 'rgba(133,170,224,0.075)',
+  floorLane: 'rgba(82,132,204,0.055)',
+  floorDot: 'rgba(159,190,235,0.16)',
+  bounds: 'rgba(112,159,236,0.34)',
+  safety: 'rgba(250,198,58,0.32)',
+  safetyStrong: 'rgba(255,211,82,0.58)',
+  safetyFill: 'rgba(250,198,58,0.018)',
+  safetyCenter: 'rgba(255,211,82,0.13)',
+  zoneText: 'rgba(255,218,105,0.44)',
 
   // Обычный шкаф: светлый корпус с бликом по верхней грани и тенью по нижней —
   // на общем плане ряды читаются как объём, а не как плоская заливка.
-  cabinet: '#9db2d4',
-  cabinetTop: '#c2d2ec',
-  cabinetShade: '#6d81a6',
-  cabinetEdge: 'rgba(10,17,32,0.5)',
+  cabinet: '#7890b2',
+  cabinetTop: '#c8d7e9',
+  cabinetShade: '#3b5273',
+  cabinetEdge: '#233753',
+  cabinetShelf: 'rgba(23,39,62,0.8)',
+  cabinetBeam: 'rgba(238,157,52,0.78)',
+  cabinetPost: 'rgba(219,232,247,0.8)',
+  cabinetShadow: 'rgba(0,4,12,0.42)',
 
   // Глухие блоки — это стены из шкафов, к которым нельзя подойти. Их до
   // половины на уровне, поэтому им нужен и свой тон, и заметный контур:
   // без контура тёмная заливка сливалась с полом.
-  blind: '#4d5f83',
-  blindEdge: '#7d8fb5',
+  blind: '#34445e',
+  blindEdge: '#7185a5',
 
-  facing: '#ff2d92',
-  facingGlow: 'rgba(255,45,146,0.35)',
+  facing: '#ff4d9d',
+  facingCore: '#ffd3e7',
+  facingGlow: 'rgba(255,77,157,0.34)',
 
-  pick: '#2ee06a',
-  pickTop: '#7df3a6',
+  pick: '#35b977',
+  pickTop: '#9af1bc',
+  pickShade: '#16754c',
 
-  selected: '#ef4444',
-  selectedFill: 'rgba(239,68,68,0.45)',
-  obstacle: 'rgba(8,12,20,0.9)',
-  obstacleEdge: '#3a465c',
+  selected: '#ff3b5f',
+  selectedCore: '#fff5f7',
+  selectedFill: 'rgba(255,45,80,0.58)',
+  hover: '#d8e7ff',
+  hoverGlow: 'rgba(99,151,255,0.42)',
+  obstacle: 'rgba(5,10,19,0.94)',
+  obstacleEdge: '#41516c',
   routeBad: '#ff8a3d',
   routeGood: '#22d3ee',
   routeStart: '#ffffff',
@@ -255,6 +272,7 @@ export class TopologyMap {
     this.grid = null;
     this.pickSet = new Set();
     this.selected = new Set();
+    this.hovered = -1;
 
     this.routes = { bad: [], good: [] };
     this.activeRoute = 'bad';
@@ -306,6 +324,7 @@ export class TopologyMap {
     this.grid = new SpatialGrid(this.cabinets);
 
     this.selected = new Set();
+    this.hovered = -1;
     this.gosha.idle(this.routes[this.activeRoute]);
 
     this.resize();
@@ -509,6 +528,7 @@ export class TopologyMap {
     const c = this.canvas;
 
     c.addEventListener('pointerdown', (e) => {
+      c.style.cursor = 'grabbing';
       c.setPointerCapture(e.pointerId);
       this._pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
 
@@ -536,7 +556,10 @@ export class TopologyMap {
     });
 
     c.addEventListener('pointermove', (e) => {
-      if (!this._pointers.has(e.pointerId)) return;
+      if (!this._pointers.has(e.pointerId)) {
+        if (e.pointerType === 'mouse') this._updateHover(e.clientX, e.clientY);
+        return;
+      }
       this._pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
       const g = this._gesture;
       if (!g) return;
@@ -589,6 +612,8 @@ export class TopologyMap {
 
       if (this._pointers.size === 0) {
         this._gesture = null;
+        if (e.pointerType === 'mouse') this._updateHover(e.clientX, e.clientY);
+        else c.style.cursor = 'grab';
       } else if (this._pointers.size === 1) {
         const [only] = Array.from(this._pointers.values());
         this._gesture = {
@@ -605,6 +630,9 @@ export class TopologyMap {
 
     c.addEventListener('pointerup', endPointer);
     c.addEventListener('pointercancel', endPointer);
+    c.addEventListener('pointerleave', () => {
+      if (this._pointers.size === 0) this._setHovered(-1);
+    });
 
     c.addEventListener(
       'wheel',
@@ -622,6 +650,46 @@ export class TopologyMap {
       this.zoomBy(1.8, e.clientX - rect.left, e.clientY - rect.top);
     });
 
+    c.addEventListener('keydown', (e) => {
+      const pan = 48;
+      let handled = true;
+      switch (e.key) {
+        case '+':
+        case '=':
+          this.zoomBy(1.45);
+          break;
+        case '-':
+        case '_':
+          this.zoomBy(1 / 1.45);
+          break;
+        case '0':
+          this.fit();
+          break;
+        case 'ArrowLeft':
+          this.originX += pan;
+          break;
+        case 'ArrowRight':
+          this.originX -= pan;
+          break;
+        case 'ArrowUp':
+          this.originY += pan;
+          break;
+        case 'ArrowDown':
+          this.originY -= pan;
+          break;
+        case 'Escape':
+        case 'Delete':
+          this.clearSelection();
+          break;
+        default:
+          handled = false;
+      }
+      if (!handled) return;
+      e.preventDefault();
+      this._clampOrigin();
+      this.requestDraw();
+    });
+
     // Браузер не должен превращать жесты по карте в скролл страницы.
     c.style.touchAction = 'none';
   }
@@ -637,6 +705,21 @@ export class TopologyMap {
 
     const idx = this.grid.pick(w.x, w.y, radiusX, radiusY);
     if (idx >= 0) this.toggleCabinet(idx);
+  }
+
+  _updateHover(clientX, clientY) {
+    if (!this.grid) return;
+    const w = this._toWorld(clientX, clientY);
+    const radiusX = Math.max(0.08, 3 / this.scale);
+    const radiusY = Math.max(0.08, 3 / (this.scale * Y_SQUEEZE));
+    this._setHovered(this.grid.pick(w.x, w.y, radiusX, radiusY));
+  }
+
+  _setHovered(idx) {
+    if (idx === this.hovered) return;
+    this.hovered = idx;
+    this.canvas.style.cursor = idx >= 0 ? 'pointer' : 'grab';
+    this.requestDraw();
   }
 
   _observeResize() {
@@ -698,6 +781,7 @@ export class TopologyMap {
     const viewY1 = (this.height - oy) / sy + 4;
 
     this._drawBounds(ctx, ox, oy, s, sy);
+    this._drawWarehouseFloor(ctx, ox, oy, s, sy, viewX0, viewX1, viewY0, viewY1);
     this._drawObstacles(ctx, ox, oy, s, sy, viewX0, viewX1, viewY0, viewY1);
     this._drawCabinets(ctx, ox, oy, s, sy, viewX0, viewX1, viewY0, viewY1);
 
@@ -706,6 +790,7 @@ export class TopologyMap {
     }
 
     this._drawRoute(ctx, ox, oy, s, sy);
+    this._drawHoverMarker(ctx, ox, oy, s, sy);
     this._drawSelectionMarkers(ctx, ox, oy, s, sy);
     this.gosha.draw(ctx, ox, oy, s, sy, performance.now());
   }
@@ -719,7 +804,11 @@ export class TopologyMap {
     const h = b.h * sy;
 
     ctx.save();
-    ctx.fillStyle = COLORS.floor;
+    const floorGradient = ctx.createLinearGradient(x, y, x + w * 0.7, y + h);
+    floorGradient.addColorStop(0, COLORS.floorLight);
+    floorGradient.addColorStop(0.46, COLORS.floor);
+    floorGradient.addColorStop(1, COLORS.floorDeep);
+    ctx.fillStyle = floorGradient;
     ctx.fillRect(x, y, w, h);
 
     // Разметка пола: шаг сетки равен шагу колонн стеллажей, поэтому проходы
@@ -730,6 +819,14 @@ export class TopologyMap {
       ctx.beginPath();
       ctx.rect(x, y, w, h);
       ctx.clip();
+
+      // Очень мягкие полосы намекают на проходы и дают глазу ориентиры при
+      // панорамировании, не споря с маршрутами и шкафами.
+      ctx.fillStyle = COLORS.floorLane;
+      for (let gx = x + step; gx < x + w; gx += step * 2) {
+        ctx.fillRect(gx - step * 0.12, y, step * 0.24, h);
+      }
+
       ctx.strokeStyle = COLORS.floorLine;
       ctx.lineWidth = 1;
       ctx.beginPath();
@@ -743,9 +840,26 @@ export class TopologyMap {
         ctx.lineTo(x + w, Math.round(gy) + 0.5);
       }
       ctx.stroke();
+
+      // На крупном масштабе появляются точки разметки пола. На общем плане
+      // они не рисуются, чтобы карта не превращалась в муар.
+      if (step >= 28) {
+        ctx.fillStyle = COLORS.floorDot;
+        const r = Math.min(1.5, step * 0.035);
+        for (let gx = x + step; gx < x + w; gx += step) {
+          for (let gy = y + stepY; gy < y + h; gy += stepY) {
+            ctx.beginPath();
+            ctx.arc(gx, gy, r, 0, Math.PI * 2);
+            ctx.fill();
+          }
+        }
+      }
       ctx.restore();
     }
 
+    ctx.strokeStyle = 'rgba(0,0,0,0.48)';
+    ctx.lineWidth = 8;
+    ctx.strokeRect(x - 1, y - 1, w + 2, h + 2);
     ctx.strokeStyle = COLORS.bounds;
     ctx.lineWidth = 1.5;
     ctx.setLineDash([6, 5]);
@@ -753,8 +867,135 @@ export class TopologyMap {
     ctx.restore();
   }
 
+  /**
+   * Постоянная разметка настоящего склада. Это не игровой маршрут: жёлтые
+   * линии лежат на полу под стеллажами, заметно тоньше и не анимируются.
+   * Координаты совпадают с регулярным шагом рядов из levels.js.
+   */
+  _drawWarehouseFloor(ctx, ox, oy, s, sy, x0, x1, y0, y1) {
+    if (!this.bounds) return;
+
+    const b = this.bounds;
+    const right = b.x + b.w;
+    const bottom = b.y + b.h;
+    const aisleHalf = 1.36;
+    const laneYs = [];
+    for (let y = 5.36; y < bottom - 1; y += 6.72) laneYs.push(y);
+    // Не размечаем каждый технологический зазор: четыре главных прохода дают
+    // складской контекст и не превращают пол в жёлтую координатную сетку.
+    const markedLanes = laneYs.filter((_, index) => index % 4 === 0);
+
+    // Невидимые границы секций нужны только для подписей A-01…A-07. Линии
+    // через них не проводим, поэтому четыре прохода нигде не пересекаются.
+    const sectionAnchors = [
+      { x: 14.675, half: 1.05 },
+      { x: 28.975, half: 2.65 },
+      { x: 43.275, half: 1.05 },
+      { x: 57.575, half: 2.65 },
+      { x: 71.875, half: 1.05 },
+      { x: 86.175, half: 2.65 },
+    ];
+
+    ctx.save();
+    ctx.beginPath();
+    ctx.rect(ox + b.x * s, oy + b.y * sy, b.w * s, b.h * sy);
+    ctx.clip();
+
+    // Чуть более тёплый эпоксидный пол внутри проходов.
+    ctx.fillStyle = COLORS.safetyFill;
+    for (const y of markedLanes) {
+      if (y + aisleHalf < y0 || y - aisleHalf > y1) continue;
+      ctx.fillRect(ox + b.x * s, oy + (y - aisleHalf) * sy, b.w * s, aisleHalf * 2 * sy);
+    }
+
+    // Редкий длинный пунктир похож на напольную разметку и не конкурирует с
+    // коротким белым штрихом внутри игрового маршрута.
+    const dash = Math.max(8, Math.min(24, s * 4.2));
+    const gap = Math.max(5, Math.min(14, s * 2.1));
+    ctx.strokeStyle = COLORS.safety;
+    ctx.lineWidth = Math.max(0.7, Math.min(2, s * 0.15));
+    ctx.setLineDash([dash, gap]);
+    ctx.beginPath();
+    for (const y of markedLanes) {
+      if (y + aisleHalf < y0 || y - aisleHalf > y1) continue;
+      for (const edgeY of [y - aisleHalf, y + aisleHalf]) {
+        ctx.moveTo(ox + b.x * s, oy + edgeY * sy);
+        ctx.lineTo(ox + right * s, oy + edgeY * sy);
+      }
+    }
+    ctx.stroke();
+
+    // Тонкая осевая линия и стрелки задают направление движения техники.
+    ctx.strokeStyle = COLORS.safetyCenter;
+    ctx.lineWidth = Math.max(0.65, Math.min(1.4, s * 0.1));
+    ctx.setLineDash([Math.max(2, s * 0.55), Math.max(5, s * 2.1)]);
+    ctx.beginPath();
+    for (const y of markedLanes) {
+      if (y < y0 || y > y1) continue;
+      ctx.moveTo(ox + b.x * s, oy + y * sy);
+      ctx.lineTo(ox + right * s, oy + y * sy);
+    }
+    ctx.stroke();
+    ctx.setLineDash([]);
+
+    if (s >= 4) {
+      const arrow = Math.max(2.4, Math.min(6.5, s * 0.72));
+      ctx.strokeStyle = COLORS.safetyStrong;
+      ctx.lineWidth = Math.max(0.8, Math.min(1.7, s * 0.13));
+      ctx.lineCap = 'round';
+      ctx.lineJoin = 'round';
+      for (let row = 0; row < markedLanes.length; row++) {
+        const y = markedLanes[row];
+        if (y < y0 || y > y1) continue;
+        const dir = row % 2 === 0 ? 1 : -1;
+        for (let wx = b.x + 7 + (row % 2) * 6; wx < right - 4; wx += 14) {
+          if (wx < x0 || wx > x1) continue;
+          const px = ox + wx * s;
+          const py = oy + y * sy;
+          ctx.beginPath();
+          ctx.moveTo(px - dir * arrow, py - arrow * 0.55);
+          ctx.lineTo(px, py);
+          ctx.lineTo(px - dir * arrow, py + arrow * 0.55);
+          ctx.stroke();
+        }
+      }
+    }
+
+    // Маркировка секций помогает ориентироваться в длинных одинаковых рядах.
+    if (s >= 4 && markedLanes.length) {
+      const separators = [b.x, ...sectionAnchors.map((a) => a.x), right];
+      const labelY = markedLanes[0];
+      const fontSize = Math.max(7, Math.min(12, s * 1.05));
+      ctx.font = `700 ${fontSize}px Inter, system-ui, sans-serif`;
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillStyle = COLORS.zoneText;
+      for (let i = 0; i < separators.length - 1; i++) {
+        const center = (separators[i] + separators[i + 1]) / 2;
+        if (center < x0 || center > x1) continue;
+        ctx.fillText(`A-${String(i + 1).padStart(2, '0')}`, ox + center * s, oy + labelY * sy);
+      }
+    }
+
+    ctx.restore();
+  }
+
   _drawObstacles(ctx, ox, oy, s, sy, x0, x1, y0, y1) {
     if (this.obstacles.length === 0) return;
+    ctx.save();
+
+    // Тень превращает служебный блок в физическую стену/колонну, а не в
+    // случайный чёрный прямоугольник на схеме.
+    if (s >= 3) {
+      ctx.fillStyle = 'rgba(0,0,0,0.34)';
+      ctx.beginPath();
+      for (const obs of this.obstacles) {
+        if (obs.x > x1 || obs.x + obs.w < x0 || obs.y > y1 || obs.y + obs.h < y0) continue;
+        ctx.rect(ox + obs.x * s + 2, oy + obs.y * sy + 2, obs.w * s, obs.h * sy);
+      }
+      ctx.fill();
+    }
+
     ctx.fillStyle = COLORS.obstacle;
     ctx.beginPath();
     for (const obs of this.obstacles) {
@@ -765,13 +1006,26 @@ export class TopologyMap {
     ctx.strokeStyle = COLORS.obstacleEdge;
     ctx.lineWidth = 1;
     ctx.stroke();
+
+    // Защитная жёлтая окантовка вокруг стен и колонн — привычный визуальный
+    // язык склада. Она статична и пунктирная, поэтому не похожа на маршрут.
+    ctx.strokeStyle = 'rgba(250,198,58,0.58)';
+    ctx.lineWidth = Math.max(0.8, Math.min(2, s * 0.13));
+    ctx.setLineDash([Math.max(3, s * 0.8), Math.max(2, s * 0.55)]);
+    ctx.beginPath();
+    for (const obs of this.obstacles) {
+      if (obs.x > x1 || obs.x + obs.w < x0 || obs.y > y1 || obs.y + obs.h < y0) continue;
+      ctx.rect(
+        ox + obs.x * s - Math.min(3, s * 0.22),
+        oy + obs.y * sy - Math.min(3, sy * 0.22),
+        obs.w * s + Math.min(6, s * 0.44),
+        obs.h * sy + Math.min(6, sy * 0.44),
+      );
+    }
+    ctx.stroke();
+    ctx.restore();
   }
 
-  /**
-   * Шкафы рисуются пачками по цвету: накапливаем прямоугольники в один путь
-   * и заливаем разом. Смена состояния контекста — самая дорогая операция,
-   * поэтому их тут ровно столько, сколько цветов.
-   */
   /**
    * Шкафы рисуются пачками по материалу: прямоугольники накапливаются в один
    * путь и заливаются разом. Смена состояния контекста — самая дорогая
@@ -788,6 +1042,7 @@ export class TopologyMap {
     const minSide = Math.min(cellW, cellH);
 
     const showEdges = minSide >= 2.5;
+    const showMedium = minSide >= 4.5;
     const showDetail = minSide >= DETAIL_THRESHOLD_PX;
     const showRound = minSide >= 14 && HAS_ROUND_RECT;
 
@@ -805,9 +1060,9 @@ export class TopologyMap {
 
     const radius = showRound ? Math.min(3, minSide * 0.14) : 0;
 
-    const addRect = (c) => {
-      const px = ox + c.x * s;
-      const py = oy + c.y * sy;
+    const addRect = (c, dx = 0, dy = 0) => {
+      const px = ox + c.x * s + dx;
+      const py = oy + c.y * sy + dy;
       const pw = Math.max(c.w * s, 1);
       const ph = Math.max(c.h * sy, 1);
       if (radius > 0) ctx.roundRect(px, py, pw, ph, radius);
@@ -821,6 +1076,18 @@ export class TopologyMap {
       for (const i of list) addRect(cabs[i]);
       ctx.fill();
     };
+
+    // Общая тень отделяет ряды от пола даже на общем плане. Она остаётся
+    // дешёвой: все видимые шкафы собираются в один путь.
+    if (minSide >= 2.2) {
+      const shadowOffset = Math.max(0.65, Math.min(2.2, minSide * 0.13));
+      ctx.fillStyle = COLORS.cabinetShadow;
+      ctx.beginPath();
+      for (const i of normal) addRect(cabs[i], shadowOffset, shadowOffset);
+      for (const i of picks) addRect(cabs[i], shadowOffset, shadowOffset);
+      for (const i of blind) addRect(cabs[i], shadowOffset, shadowOffset);
+      ctx.fill();
+    }
 
     fillGroup(normal, COLORS.cabinet);
     fillGroup(picks, COLORS.pick);
@@ -840,13 +1107,40 @@ export class TopologyMap {
       }
     }
 
-    if (!showDetail) {
+    if (!showMedium) {
+      // На общем плане отдельный шкаф слишком мал для полок и стоек, но две
+      // тонкие грани уже создают ощущение металлического корпуса вместо
+      // плоского прямоугольника.
+      if (minSide >= 1.7) {
+        const microBevel = Math.max(0.55, Math.min(1.05, minSide * 0.22));
+        const strip = (list, color, atBottom) => {
+          if (!list.length) return;
+          ctx.fillStyle = color;
+          ctx.beginPath();
+          for (const i of list) {
+            const c = cabs[i];
+            const px = ox + c.x * s;
+            const py = atBottom
+              ? oy + (c.y + c.h) * sy - microBevel
+              : oy + c.y * sy;
+            ctx.rect(px, py, Math.max(c.w * s, 1), microBevel);
+          }
+          ctx.fill();
+        };
+
+        strip(normal, COLORS.cabinetTop, false);
+        strip(normal, COLORS.cabinetShade, true);
+        strip(picks, COLORS.pickTop, false);
+        strip(picks, COLORS.pickShade, true);
+        strip(blind, COLORS.blindEdge, false);
+        strip(blind, COLORS.cabinetEdge, true);
+      }
       this._drawPickMarkers(ctx, ox, oy, s, sy, picks);
       return;
     }
 
     const bevel = Math.max(1, Math.min(2.5, cellH * 0.1));
-    this._detailRacks(ctx, ox, oy, s, sy, normal, picks, bevel);
+    this._detailRacks(ctx, ox, oy, s, sy, normal, picks, bevel, minSide, showDetail);
     this._drawFacings(ctx, ox, oy, s, sy, x0, x1, y0, y1, minSide);
   }
 
@@ -855,7 +1149,7 @@ export class TopologyMap {
    * внутри. Полки появляются только когда между ними остаётся хотя бы
    * несколько пикселей — иначе они сливаются в грязь.
    */
-  _detailRacks(ctx, ox, oy, s, sy, normal, picks, bevel) {
+  _detailRacks(ctx, ox, oy, s, sy, normal, picks, bevel, minSide, showDetail) {
     const cabs = this.cabinets;
     const all = normal.concat(picks);
 
@@ -874,6 +1168,7 @@ export class TopologyMap {
     strip(normal, COLORS.cabinetTop, false);
     strip(picks, COLORS.pickTop, false);
     strip(normal, COLORS.cabinetShade, true);
+    strip(picks, COLORS.pickShade, true);
 
     ctx.strokeStyle = COLORS.cabinetEdge;
     ctx.lineWidth = 1;
@@ -884,23 +1179,91 @@ export class TopologyMap {
     }
     ctx.stroke();
 
-    const shelfGap = (1.68 * sy) / 3;
-    if (shelfGap < 5) return;
+    if (!showDetail) return;
 
-    ctx.strokeStyle = 'rgba(19,32,56,0.5)';
-    ctx.lineWidth = 1;
+    // Оранжевые балки и светлые стойки делают ячейки похожими на складские
+    // паллетные стеллажи, а не на одинаковые блоки технической схемы.
+    ctx.strokeStyle = COLORS.cabinetBeam;
+    ctx.lineWidth = Math.max(0.8, Math.min(1.35, minSide * 0.07));
     ctx.beginPath();
     for (const i of all) {
       const c = cabs[i];
       const px = ox + c.x * s;
       const pw = c.w * s;
+      const ph = c.h * sy;
       for (let k = 1; k < 3; k++) {
         const py = Math.round(oy + (c.y + (c.h * k) / 3) * sy) + 0.5;
-        ctx.moveTo(px + 1, py);
-        ctx.lineTo(px + pw - 1, py);
+        if (ph / 3 >= 4) {
+          ctx.moveTo(px + 1, py);
+          ctx.lineTo(px + pw - 1, py);
+        }
       }
     }
     ctx.stroke();
+
+    // Тёмная внутренняя линия под балкой добавляет глубину полкам.
+    ctx.strokeStyle = COLORS.cabinetShelf;
+    ctx.lineWidth = Math.max(0.6, Math.min(1, minSide * 0.045));
+    ctx.beginPath();
+    for (const i of all) {
+      const c = cabs[i];
+      const px = ox + c.x * s;
+      const pw = c.w * s;
+      const ph = c.h * sy;
+      for (let k = 1; k < 3; k++) {
+        const py = Math.round(oy + (c.y + (c.h * k) / 3) * sy) + 1.5;
+        if (ph / 3 >= 4) {
+          ctx.moveTo(px + 1, py);
+          ctx.lineTo(px + pw - 1, py);
+        }
+      }
+    }
+    ctx.stroke();
+
+    // На близком масштабе видны светлые стойки каркаса и тёмные ячейки с
+    // товаром. Цвета детерминированы индексом, поэтому при движении карты
+    // содержимое не мерцает и не «пересортировывается».
+    if (minSide < 14) return;
+
+    ctx.strokeStyle = COLORS.cabinetPost;
+    ctx.lineWidth = Math.max(1, Math.min(2, minSide * 0.08));
+    ctx.beginPath();
+    for (const i of all) {
+      const c = cabs[i];
+      const px = ox + c.x * s;
+      const py = oy + c.y * sy;
+      const pw = c.w * s;
+      const ph = c.h * sy;
+      ctx.moveTo(px + Math.min(2, pw * 0.14), py + bevel);
+      ctx.lineTo(px + Math.min(2, pw * 0.14), py + ph - bevel);
+      ctx.moveTo(px + pw - Math.min(2, pw * 0.14), py + bevel);
+      ctx.lineTo(px + pw - Math.min(2, pw * 0.14), py + ph - bevel);
+    }
+    ctx.stroke();
+
+    if (minSide < 19) return;
+    for (const i of all) {
+      const c = cabs[i];
+      const px = ox + c.x * s;
+      const py = oy + c.y * sy;
+      const pw = c.w * s;
+      const ph = c.h * sy;
+      const inset = Math.max(2.5, minSide * 0.14);
+      const slotH = ph / 3;
+      for (let k = 0; k < 3; k++) {
+        if ((i + k) % 4 === 0) continue;
+        const padY = Math.max(2, slotH * 0.2);
+        ctx.fillStyle = (i + k) % 3 === 0
+          ? 'rgba(255,196,92,0.38)'
+          : 'rgba(37,66,102,0.5)';
+        ctx.fillRect(
+          px + inset,
+          py + k * slotH + padY,
+          Math.max(1, pw - inset * 2),
+          Math.max(1, slotH - padY * 1.35)
+        );
+      }
+    }
   }
 
   /** Грань подхода — ключевая информация уровня, рисуется поверх любого стиля. */
@@ -944,6 +1307,57 @@ export class TopologyMap {
     ctx.beginPath();
     for (const k of facing) ctx.rect(...rect(cabs[k], stripe, 0));
     ctx.fill();
+
+    if (minSide >= 12) {
+      ctx.fillStyle = COLORS.facingCore;
+      ctx.beginPath();
+      for (const k of facing) ctx.rect(...rect(cabs[k], Math.max(0.8, stripe * 0.3), 0));
+      ctx.fill();
+    }
+
+    // На близком масштабе маленькая стрелка буквально показывает, с какой
+    // стороны к шкафу должен подойти сборщик. Одной розовой полосы новичкам
+    // часто было недостаточно.
+    if (minSide >= 16) {
+      const arrow = Math.min(5, minSide * 0.22);
+      ctx.fillStyle = COLORS.facing;
+      ctx.shadowColor = COLORS.facingGlow;
+      ctx.shadowBlur = arrow * 1.8;
+      for (const k of facing) {
+        const c = cabs[k];
+        const px = ox + c.x * s;
+        const py = oy + c.y * sy;
+        const pw = c.w * s;
+        const ph = c.h * sy;
+        const cx = px + pw / 2;
+        const cy = py + ph / 2;
+        ctx.beginPath();
+        switch (c.facing) {
+          case 'bottom':
+            ctx.moveTo(cx, py + ph + arrow);
+            ctx.lineTo(cx - arrow * 0.72, py + ph + arrow * 0.12);
+            ctx.lineTo(cx + arrow * 0.72, py + ph + arrow * 0.12);
+            break;
+          case 'top':
+            ctx.moveTo(cx, py - arrow);
+            ctx.lineTo(cx - arrow * 0.72, py - arrow * 0.12);
+            ctx.lineTo(cx + arrow * 0.72, py - arrow * 0.12);
+            break;
+          case 'left':
+            ctx.moveTo(px - arrow, cy);
+            ctx.lineTo(px - arrow * 0.12, cy - arrow * 0.72);
+            ctx.lineTo(px - arrow * 0.12, cy + arrow * 0.72);
+            break;
+          default:
+            ctx.moveTo(px + pw + arrow, cy);
+            ctx.lineTo(px + pw + arrow * 0.12, cy - arrow * 0.72);
+            ctx.lineTo(px + pw + arrow * 0.12, cy + arrow * 0.72);
+        }
+        ctx.closePath();
+        ctx.fill();
+      }
+      ctx.shadowBlur = 0;
+    }
   }
 
   /**
@@ -954,6 +1368,9 @@ export class TopologyMap {
     if (picks.length === 0 || 0.84 * s >= MIN_PICK_MARKER_PX) return;
     const cabs = this.cabinets;
     const r = MIN_PICK_MARKER_PX / 2;
+    ctx.save();
+    ctx.shadowColor = 'rgba(46,224,106,0.55)';
+    ctx.shadowBlur = 8;
     ctx.fillStyle = COLORS.pick;
     ctx.beginPath();
     for (const i of picks) {
@@ -964,6 +1381,11 @@ export class TopologyMap {
       ctx.arc(cx, cy, r, 0, Math.PI * 2);
     }
     ctx.fill();
+    ctx.shadowBlur = 0;
+    ctx.strokeStyle = '#d9ffe7';
+    ctx.lineWidth = 1.25;
+    ctx.stroke();
+    ctx.restore();
   }
 
   _drawHintZone(ctx, ox, oy, s, sy) {
@@ -1031,6 +1453,30 @@ export class TopologyMap {
     ctx.restore();
   }
 
+  _drawHoverMarker(ctx, ox, oy, s, sy) {
+    if (this.hovered < 0) return;
+    const c = this.cabinets[this.hovered];
+    if (!c) return;
+
+    const x = ox + c.x * s;
+    const y = oy + c.y * sy;
+    const w = c.w * s;
+    const h = c.h * sy;
+    const pad = Math.max(2, Math.min(4, Math.min(w, h) * 0.18));
+    const radius = Math.min(5, Math.min(w, h) * 0.2 + 2);
+
+    ctx.save();
+    ctx.strokeStyle = this.selected.has(this.hovered) ? COLORS.selectedCore : COLORS.hover;
+    ctx.lineWidth = 2;
+    ctx.shadowColor = this.selected.has(this.hovered) ? COLORS.selected : COLORS.hoverGlow;
+    ctx.shadowBlur = 10;
+    ctx.beginPath();
+    if (HAS_ROUND_RECT) ctx.roundRect(x - pad, y - pad, w + pad * 2, h + pad * 2, radius);
+    else ctx.rect(x - pad, y - pad, w + pad * 2, h + pad * 2);
+    ctx.stroke();
+    ctx.restore();
+  }
+
   _drawSelectionMarkers(ctx, ox, oy, s, sy) {
     if (this.selected.size === 0) return;
     const cabs = this.cabinets;
@@ -1047,20 +1493,61 @@ export class TopologyMap {
     }
     ctx.fill();
 
-    // Кольцо фиксированного минимального размера — видно при любом зуме.
-    ctx.strokeStyle = COLORS.selected;
-    ctx.lineWidth = 2.5;
-    ctx.beginPath();
+    // Красная рамка и мягкое свечение повторяют форму выбранного шкафа. Так
+    // выбор заметен и на общем плане, но не возвращает прежний большой круг.
     for (const i of this.selected) {
       const c = cabs[i];
       if (!c) continue;
-      const cx = ox + (c.x + c.w / 2) * s;
-      const cy = oy + (c.y + c.h / 2) * sy;
-      const r = Math.max(MIN_MARKER_PX / 2, (c.w * s) / 2 + 3);
-      ctx.moveTo(cx + r, cy);
-      ctx.arc(cx, cy, r, 0, Math.PI * 2);
+      const x = ox + c.x * s;
+      const y = oy + c.y * sy;
+      const w = c.w * s;
+      const h = c.h * sy;
+      const minSide = Math.min(w, h);
+      const pad = Math.max(1.5, Math.min(3.5, minSide * 0.24));
+      const radius = Math.min(5, minSide * 0.2 + 1.5);
+
+      ctx.strokeStyle = COLORS.selected;
+      ctx.lineWidth = Math.max(1.8, Math.min(2.6, minSide * 0.18));
+      ctx.shadowColor = 'rgba(255,45,80,0.68)';
+      ctx.shadowBlur = 9;
+      ctx.beginPath();
+      if (HAS_ROUND_RECT) {
+        ctx.roundRect(x - pad, y - pad, w + pad * 2, h + pad * 2, radius);
+      } else {
+        ctx.rect(x - pad, y - pad, w + pad * 2, h + pad * 2);
+      }
+      ctx.stroke();
+
+      // Компактная угловая галочка остаётся дополнительным подтверждением,
+      // но теперь это шильдик стеллажа, а не круглый игровой маркер.
+      const badgeSize = Math.max(7, Math.min(11, minSide * 0.72));
+      const bx = x + w + badgeSize * 0.16;
+      const by = y - badgeSize * 0.16;
+      ctx.fillStyle = COLORS.selected;
+      ctx.beginPath();
+      if (HAS_ROUND_RECT) {
+        ctx.roundRect(
+          bx - badgeSize / 2,
+          by - badgeSize / 2,
+          badgeSize,
+          badgeSize,
+          Math.min(3, badgeSize * 0.28)
+        );
+      } else {
+        ctx.rect(bx - badgeSize / 2, by - badgeSize / 2, badgeSize, badgeSize);
+      }
+      ctx.fill();
+      ctx.shadowBlur = 0;
+      ctx.strokeStyle = COLORS.selectedCore;
+      ctx.lineWidth = Math.max(1.2, badgeSize * 0.13);
+      ctx.lineCap = 'round';
+      ctx.lineJoin = 'round';
+      ctx.beginPath();
+      ctx.moveTo(bx - badgeSize * 0.25, by);
+      ctx.lineTo(bx - badgeSize * 0.05, by + badgeSize * 0.2);
+      ctx.lineTo(bx + badgeSize * 0.28, by - badgeSize * 0.23);
+      ctx.stroke();
     }
-    ctx.stroke();
 
     ctx.restore();
   }

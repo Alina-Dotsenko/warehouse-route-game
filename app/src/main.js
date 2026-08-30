@@ -3,6 +3,7 @@ import { levels, editorTemplate } from './levels.js';
 import { TopologyMap } from './renderer.js';
 import { nameScreen, startScreen, gameScreen, endScreen, plural } from './templates.js';
 import { sound } from './audio.js';
+import { mountGoshaShowcases } from './gosha.js';
 
 const app = document.querySelector('#app');
 const isAdmin = new URLSearchParams(window.location.search).get('admin') === 'true';
@@ -33,6 +34,7 @@ function teardownMap() {
 function renderNameScreen() {
   teardownMap();
   app.innerHTML = nameScreen();
+  mountGoshaShowcases(app);
 
   const form = document.getElementById('name-form');
   const input = document.getElementById('name-input');
@@ -62,6 +64,7 @@ function renderStartScreen() {
     levelCount: levels.length,
     progress: getProgress(),
   });
+  mountGoshaShowcases(app);
 
   document.getElementById('start-btn').addEventListener('click', () => {
     localStorage.setItem(STORE_PROGRESS, '0');
@@ -95,6 +98,9 @@ function renderGameScreen() {
   const canvas = document.getElementById('map-canvas');
   const selCount = document.getElementById('sel-count');
   const selChip = document.getElementById('sel-chip');
+  const selLabel = selChip.querySelector('.selection-label');
+  const selProgress = document.getElementById('selection-progress');
+  const mapTip = document.querySelector('.map-tip');
   const btnVerify = document.getElementById('btn-verify');
   const btnZoomIn = document.getElementById('btn-zoom-in');
   const btnZoomOut = document.getElementById('btn-zoom-out');
@@ -122,17 +128,23 @@ function renderGameScreen() {
     const n = selected.size;
     selCount.textContent = String(n);
     selChip.classList.toggle('is-ready', n === total);
+    selChip.classList.toggle('is-over', n > total);
+    selProgress.style.width = `${Math.min(100, (n / Math.max(1, total)) * 100)}%`;
+    mapTip.classList.toggle('is-hidden', n > 0);
     btnClear.disabled = n === 0;
 
     if (n === total) {
+      selLabel.textContent = 'Можно проверять';
       btnVerify.disabled = false;
       btnVerify.textContent = 'Проверить решение';
     } else if (n < total) {
       const left = total - n;
+      selLabel.textContent = n === 0 ? 'Найдите ошибку' : 'Отмечено шкафов';
       btnVerify.disabled = true;
       btnVerify.textContent = `Выберите ещё ${left} ${plural(left, 'шкаф', 'шкафа', 'шкафов')}`;
     } else {
       const extra = n - total;
+      selLabel.textContent = 'Выбрано слишком много';
       btnVerify.disabled = true;
       btnVerify.textContent = `Снимите ${extra} ${plural(extra, 'лишний', 'лишних', 'лишних')}`;
     }
@@ -248,6 +260,7 @@ async function checkSolution(level, selectedIndices) {
 
 function showResult(modal, level, isCorrect) {
   const icon = document.getElementById('modal-icon');
+  const kicker = document.getElementById('modal-kicker');
   const title = document.getElementById('modal-title');
   const text = document.getElementById('modal-text');
   const action = document.getElementById('modal-action');
@@ -259,7 +272,8 @@ function showResult(modal, level, isCorrect) {
 
   if (isCorrect) {
     icon.textContent = '✓';
-    title.textContent = 'Верно!';
+    kicker.textContent = 'Проверка пройдена';
+    title.textContent = 'Маршрут исправлен';
     text.textContent = level.successMessage;
     action.textContent = isLast ? 'Завершить игру' : 'Следующий уровень';
 
@@ -273,12 +287,16 @@ function showResult(modal, level, isCorrect) {
       setTimeout(currentLevelIndex < levels.length ? renderGameScreen : renderEndScreen, 260);
     };
   } else {
-    icon.textContent = '✕';
-    title.textContent = 'Пока не то';
+    icon.textContent = '↻';
+    kicker.textContent = 'Нужна ещё проверка';
+    title.textContent = 'Маршруты пока не сходятся';
     text.textContent =
-      'Эти шкафы не объясняют разницу маршрутов. Переключитесь на «Желаемый маршрут» и посмотрите, где он проходит там, где получившийся — нет.';
-    action.textContent = 'Попробовать снова';
-    action.onclick = () => modal.classList.remove('is-open');
+      'Сравните «Как есть» и «Как надо» ещё раз. Ищите шкаф рядом с участком, где линии маршрутов расходятся.';
+    action.textContent = 'Вернуться к карте';
+    action.onclick = () => {
+      modal.classList.remove('is-open');
+      map?.clearSelection();
+    };
   }
 
   modal.classList.add('is-open');

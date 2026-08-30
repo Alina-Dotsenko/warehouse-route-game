@@ -18,26 +18,37 @@ const escapeHtml = (str) =>
 export function nameScreen() {
   return `
     <div class="screen screen-name">
-      <div class="brand brand-lg">
-        <span class="brand-mark">route-lab</span>
-        <span class="brand-sub">топология</span>
-      </div>
-      <form class="card card-narrow name-form" id="name-form">
-        <h2 class="card-title">Представьтесь</h2>
-        <p class="card-hint">Имя нужно только для приветствия — оно останется в этом браузере.</p>
-        <input
-          class="field"
-          type="text"
-          id="name-input"
-          placeholder="Ваше имя"
-          autocomplete="name"
-          maxlength="40"
-          required
-        />
-        <button class="btn btn-primary btn-block" id="name-submit" type="submit" disabled>
-          Продолжить
-        </button>
-      </form>
+      <main class="name-shell">
+        <section class="name-welcome">
+          <div class="brand brand-lg">
+            <span class="brand-mark">route-lab</span>
+            <span class="brand-sub">топология</span>
+          </div>
+          <div class="intro-kicker">Инженерная игра про склад</div>
+          <h1 class="name-title">Найдите ошибку.<br />Сократите маршрут.</h1>
+          <p class="name-lead">Помогите сборщику пройти к нужным шкафам без лишних крюков.</p>
+          <canvas class="name-goose" data-gosha-showcase aria-hidden="true"></canvas>
+        </section>
+
+        <form class="name-form" id="name-form">
+          <span class="form-step">Перед началом</span>
+          <h2 class="card-title">Как к вам обращаться?</h2>
+          <p class="card-hint">Имя нужно только для приветствия и останется в этом браузере.</p>
+          <label class="sr-only" for="name-input">Ваше имя</label>
+          <input
+            class="field"
+            type="text"
+            id="name-input"
+            placeholder="Введите имя"
+            autocomplete="name"
+            maxlength="40"
+            required
+          />
+          <button class="btn btn-primary btn-block" id="name-submit" type="submit" disabled>
+            Продолжить
+          </button>
+        </form>
+      </main>
     </div>
   `;
 }
@@ -48,77 +59,118 @@ export function startScreen({ playerName, levelCount, progress }) {
 
   return `
     <div class="screen screen-start">
-      <header class="start-head">
-        <div class="brand brand-lg">
-          <span class="brand-mark">route-lab</span>
-          <span class="brand-sub">топология</span>
+      <header class="start-hero">
+        <div class="start-copy">
+          <div class="brand">
+            <span class="brand-mark">route-lab</span>
+            <span class="brand-sub">топология</span>
+          </div>
+          <div class="intro-kicker">Инженерная игра · ${levelCount} уровней</div>
+          <div class="start-message">
+            <div class="start-message-copy">
+              <h1 class="start-title">
+                <span class="start-title-desktop">Найдите ошибку в маршруте склада</span>
+                <span class="start-title-mobile">Исправьте маршрут склада</span>
+              </h1>
+              <p class="start-lead">
+                <span class="start-lead-desktop">Сравните два маршрута, отметьте неверно настроенный шкаф и помогите Гоше пройти без лишнего крюка.</span>
+                <span class="start-lead-mobile">Сравните маршруты и найдите неверный шкаф.</span>
+              </p>
+            </div>
+          </div>
+          <div class="start-mobile-scene" aria-hidden="true">
+            <svg class="start-mobile-route" viewBox="0 0 360 128" fill="none">
+              <path d="M8 106 C72 106 70 42 132 42 S204 112 260 86 S294 22 352 22" />
+              <circle cx="8" cy="106" r="5" />
+              <circle cx="352" cy="22" r="6" />
+            </svg>
+            <div class="start-mobile-racks">
+              <span></span><span></span><span></span><span></span><span></span><span></span>
+            </div>
+            <canvas class="start-mobile-goose" data-gosha-showcase></canvas>
+          </div>
+          ${name ? `<p class="start-greeting"><span>С возвращением</span><strong>${name}</strong></p>` : ''}
+          <div class="start-actions">
+            ${
+              hasProgress
+                ? `<button class="btn btn-primary btn-lg" id="continue-btn">Продолжить с уровня ${progress + 1}</button>
+                   <button class="btn btn-ghost" id="start-btn">Начать сначала</button>`
+                : `<button class="btn btn-primary btn-lg" id="start-btn">Начать игру</button>`
+            }
+          </div>
         </div>
-        <p class="start-lead">
-          Маршрут сборщика на складе пошёл не так. Найдите шкаф, из-за которого
-          система построила его неправильно.
-        </p>
-        ${name ? `<p class="start-greeting">Вы играете как <strong>${name}</strong></p>` : ''}
-        <div class="start-actions">
-          ${
-            hasProgress
-              ? `<button class="btn btn-primary btn-lg" id="continue-btn">Продолжить с уровня ${progress + 1}</button>
-                 <button class="btn btn-ghost" id="start-btn">Начать сначала</button>`
-              : `<button class="btn btn-primary btn-lg" id="start-btn">Начать игру</button>`
-          }
+
+        <div class="start-visual" aria-hidden="true">
+          <svg class="start-route" viewBox="0 0 440 360" fill="none">
+            <path d="M22 302 C94 302 80 224 154 224 S208 104 286 104 S332 50 418 50" />
+            <circle cx="22" cy="302" r="7" />
+            <circle cx="418" cy="50" r="9" />
+          </svg>
+          <div class="mini-racks">
+            <span></span><span></span><span></span><span></span><span></span><span></span>
+          </div>
+          <canvas class="start-goose" data-gosha-showcase></canvas>
+          <div class="route-status"><span></span> Маршрут проверяется</div>
         </div>
       </header>
 
-      <div class="start-panels">
-        <section class="card panel">
-          <h3 class="panel-title">Как играть</h3>
-          <ol class="steps">
-            <li><span class="step-n">1</span><span class="step-text">Сравните <b>получившийся</b> и <b>желаемый</b> маршрут переключателем над картой.</span></li>
-            <li><span class="step-n">2</span><span class="step-text">Приблизьте карту и найдите шкаф с неверной стороной подхода или лишним блоком.</span></li>
-            <li><span class="step-n">3</span><span class="step-text">Нажмите на проблемные шкафы — они отметятся красным кольцом.</span></li>
-            <li><span class="step-n">4</span><span class="step-text">Когда выбрано нужное количество, нажмите <b>«Проверить решение»</b>.</span></li>
-          </ol>
-        </section>
-
-        <section class="card panel">
-          <h3 class="panel-title">Обозначения</h3>
-          <ul class="legend">
-            <li class="legend-row">
-              <span class="swatch swatch-cab"></span>
-              <span>Шкаф с товаром. Розовая грань — сторона подхода.</span>
-            </li>
-            <li class="legend-row">
-              <span class="swatch swatch-pick"></span>
-              <span>Шкаф, из которого нужно забрать товар.</span>
-            </li>
-            <li class="legend-row">
-              <span class="swatch swatch-blind"></span>
-              <span>Глухой блок — подойти нельзя ни с одной стороны.</span>
-            </li>
-            <li class="legend-row">
-              <span class="swatch swatch-route-bad"></span>
-              <span>Получившийся маршрут (с ошибкой).</span>
-            </li>
-            <li class="legend-row">
-              <span class="swatch swatch-route-good"></span>
-              <span>Желаемый маршрут.</span>
-            </li>
-          </ul>
-        </section>
-      </div>
-
-      <details class="card panel briefing">
-        <summary class="panel-title">Что это за система <span class="chevron" aria-hidden="true"></span></summary>
-        <div class="briefing-body">
-          <p>Есть система, которая решает задачу — как наиболее оптимальным образом собрать клиентские заказы на складе Ozon. Финальная её подзадача — построение маршрута, который проходит работник склада. Маршрут должен быть кратчайшим и обходить такие точки, чтобы собрать как можно больше заказов, но не перегрузить сборщика.</p>
-          <p>Система ориентируется на данные, которые задаёт человек, — в частности на топологию склада. Администратор переносит в систему физическое расположение шкафов, конвейеров, стен и пожарных шкафов. По этому представлению считаются расстояния и строится маршрут.</p>
-          <p>Люди ошибаются, но приоритет — клиент. Даже если администратор сделал какой-то шкаф недостижимым, мы обязаны построить маршрут до него и подобрать товар. В системе есть фолбеки и деградации, которые это гарантируют.</p>
-          <p>Но бесследно ошибки не проходят: фолбеки приводят к неожиданным маршрутам.</p>
-          <blockquote class="pull-quote">
-            Разработка — это не написание строчек кода по готовому ТЗ. Настоящая инженерия — умение исследовать нетривиальные проблемы, распутывать краевые случаи и находить логику там, где система ведёт себя непредсказуемо из-за человеческого фактора.
-          </blockquote>
-          <p><strong>Сегодня вы — дежурный одной из наших команд. Помогите администратору склада найти ошибку в топологии.</strong></p>
+      <section class="start-flow" aria-labelledby="start-flow-title">
+        <h2 class="section-label" id="start-flow-title">Всё просто — три шага</h2>
+        <div class="flow-grid">
+          <article class="flow-card">
+            <span class="step-n">1</span>
+            <div><h3>Сравните</h3><p>Переключайте маршруты «Как есть» и «Как надо».</p></div>
+          </article>
+          <article class="flow-card">
+            <span class="step-n">2</span>
+            <div><h3>Найдите</h3><p>Приблизьте подозрительный участок на карте.</p></div>
+          </article>
+          <article class="flow-card">
+            <span class="step-n">3</span>
+            <div><h3>Отметьте</h3><p>Выберите проблемные шкафы и проверьте решение.</p></div>
+          </article>
         </div>
-      </details>
+      </section>
+
+      <section class="card start-legend" aria-labelledby="legend-title">
+        <div class="legend-heading">
+          <h2 class="panel-title" id="legend-title">Что будет на карте</h2>
+          <p>Розовая грань шкафа показывает сторону подхода.</p>
+        </div>
+        <ul class="legend">
+          <li class="legend-row">
+            <span class="swatch swatch-cab"></span>
+            <span>Обычный шкаф</span>
+          </li>
+          <li class="legend-row">
+            <span class="swatch swatch-pick"></span>
+            <span>Точка отбора</span>
+          </li>
+          <li class="legend-row">
+            <span class="swatch swatch-blind"></span>
+            <span>Глухой блок</span>
+          </li>
+          <li class="legend-row">
+            <span class="swatch swatch-route-bad"></span>
+            <span>Как есть</span>
+          </li>
+          <li class="legend-row">
+            <span class="swatch swatch-route-good"></span>
+            <span>Как надо</span>
+          </li>
+          <li class="legend-row">
+            <span class="swatch swatch-aisle"></span>
+            <span>Проход склада</span>
+          </li>
+        </ul>
+      </section>
+
+      <section class="card briefing start-about" aria-labelledby="start-about-title">
+        <h2 class="panel-title" id="start-about-title">Зачем это нужно?</h2>
+        <div class="briefing-body">
+          <p>Система строит кратчайший путь по данным склада. Ошибка в топологии создаёт лишний крюк — в игре вы находите её до того, как она помешает сборщику.</p>
+        </div>
+      </section>
     </div>
   `;
 }
@@ -129,20 +181,35 @@ export function gameScreen({ level, levelIndex, levelCount }) {
   return `
     <div class="screen screen-game">
       <header class="game-header">
-        <div class="hud-pill" id="sel-chip">
-          <span class="pill-level">Уровень ${levelIndex + 1}/${levelCount}</span>
-          <span class="pill-sep" aria-hidden="true"></span>
-          <span class="pill-count">Выбрано <b id="sel-count">0</b>/<span id="sel-total">${total}</span></span>
+        <div class="game-context">
+          <span class="game-mark" aria-hidden="true">e</span>
+          <span class="game-context-copy">
+            <span class="game-product">route-lab · topology</span>
+            <span class="game-level">Уровень ${levelIndex + 1} из ${levelCount}</span>
+          </span>
+        </div>
+
+        <div class="selection-meter" id="sel-chip" role="status" aria-live="polite">
+          <span class="selection-meta">
+            <span class="selection-label">Найдите ошибку</span>
+            <span class="selection-value"><b id="sel-count">0</b><span>/ ${total}</span></span>
+          </span>
+          <span class="selection-track" aria-hidden="true">
+            <span class="selection-progress" id="selection-progress"></span>
+          </span>
         </div>
 
         <div class="header-tools">
-          <div class="segmented" role="tablist" aria-label="Маршрут">
-            <button class="seg-btn is-active" id="btn-route-bad" role="tab" aria-selected="true">
-              <span class="dot dot-bad"></span><span class="seg-label">Как есть</span>
-            </button>
-            <button class="seg-btn" id="btn-route-good" role="tab" aria-selected="false">
-              <span class="dot dot-good"></span><span class="seg-label">Как надо</span>
-            </button>
+          <div class="route-control">
+            <span class="route-control-label">Маршрут</span>
+            <div class="segmented" role="tablist" aria-label="Маршрут">
+              <button class="seg-btn route-bad is-active" id="btn-route-bad" role="tab" aria-selected="true">
+                <span class="dot dot-bad"></span><span class="seg-label">Как есть</span>
+              </button>
+              <button class="seg-btn route-good" id="btn-route-good" role="tab" aria-selected="false">
+                <span class="dot dot-good"></span><span class="seg-label">Как надо</span>
+              </button>
+            </div>
           </div>
           <button class="icon-btn" id="btn-hint" title="Подсказка" aria-label="Подсказка">${icon('bulb')}</button>
           <button class="icon-btn" id="btn-clear-selection" title="Сбросить выбор" aria-label="Сбросить выбор" disabled>${icon('reset')}</button>
@@ -154,7 +221,17 @@ export function gameScreen({ level, levelIndex, levelCount }) {
 
       <div class="game-body">
         <div class="map-stage" id="map-stage">
-          <canvas class="map-canvas" id="map-canvas"></canvas>
+          <canvas
+            class="map-canvas"
+            id="map-canvas"
+            tabindex="0"
+            aria-label="Карта склада. Перетаскивайте карту, масштабируйте и выбирайте шкафы."
+          ></canvas>
+
+          <div class="map-tip" aria-hidden="true">
+            <span class="map-tip-pulse"></span>
+            <span>Нажмите на шкаф, чтобы отметить его</span>
+          </div>
 
           <div class="map-controls">
             <button class="icon-btn map-ctl" id="btn-zoom-in" title="Приблизить" aria-label="Приблизить">${icon('plus')}</button>
@@ -171,13 +248,17 @@ export function gameScreen({ level, levelIndex, levelCount }) {
         <button class="sheet-handle" id="sheet-toggle" aria-expanded="false" aria-controls="sheet-body">
           <span class="handle-grip" aria-hidden="true"></span>
           <span class="sheet-peek">
-            <span class="complaint-badge">Жалоба</span>
+            <span class="complaint-badge">Задача</span>
             <span class="sheet-peek-text">${escapeHtml(level.complaint)}</span>
           </span>
           <span class="chevron" aria-hidden="true"></span>
         </button>
 
         <div class="sheet-body" id="sheet-body">
+          <div class="complaint-heading">
+            <span class="complaint-kicker">Сообщение администратора</span>
+            <strong>Что случилось на складе</strong>
+          </div>
           <p class="complaint-body">${escapeHtml(level.complaint)}</p>
 
           <div class="hint-box" id="hint-box" hidden>
@@ -188,15 +269,16 @@ export function gameScreen({ level, levelIndex, levelCount }) {
           <div class="sheet-legend">
             <h3 class="side-legend-title">Обозначения</h3>
             <ul class="legend">
-              <li class="legend-row"><span class="swatch swatch-cab"></span><span>Шкаф. Розовая грань — сторона подхода</span></li>
+              <li class="legend-row"><span class="swatch swatch-cab"></span><span>Шкаф. Розовая метка — сторона подхода</span></li>
               <li class="legend-row"><span class="swatch swatch-pick"></span><span>Отсюда нужно забрать товар</span></li>
               <li class="legend-row"><span class="swatch swatch-blind"></span><span>Глухой блок — подойти нельзя</span></li>
               <li class="legend-row"><span class="swatch swatch-route-bad"></span><span>Получившийся маршрут</span></li>
               <li class="legend-row"><span class="swatch swatch-route-good"></span><span>Желаемый маршрут</span></li>
+              <li class="legend-row"><span class="swatch swatch-aisle"></span><span>Размеченный проход склада</span></li>
             </ul>
 
             <p class="sheet-controls">
-              <span class="ctl-desktop">Колесо мыши — масштаб, перетаскивание — сдвиг, клик по шкафу — выбрать или снять выбор.</span>
+              <span class="ctl-desktop">Колесо или +/− — масштаб, 0 — весь склад, стрелки — сдвиг, клик по шкафу — выбрать.</span>
               <span class="ctl-touch">Два пальца — масштаб, один — сдвиг, касание шкафа — выбрать или снять выбор.</span>
             </p>
           </div>
@@ -205,11 +287,15 @@ export function gameScreen({ level, levelIndex, levelCount }) {
       </div>
 
       <div class="modal-backdrop" id="result-modal">
-        <div class="modal" role="dialog" aria-modal="true" aria-labelledby="modal-title">
-          <div class="modal-icon" id="modal-icon" aria-hidden="true"></div>
+        <div class="modal" role="dialog" aria-modal="true" aria-labelledby="modal-title" aria-describedby="modal-text">
+          <div class="modal-status">
+            <div class="modal-icon" id="modal-icon" aria-hidden="true"></div>
+            <span class="modal-kicker" id="modal-kicker"></span>
+          </div>
+          <div class="modal-signal" aria-hidden="true"><span></span><span></span><span></span></div>
           <h2 class="modal-title" id="modal-title"></h2>
           <p class="modal-text" id="modal-text"></p>
-          <button class="btn btn-primary btn-lg btn-block" id="modal-action"></button>
+          <button class="btn btn-primary btn-lg btn-block modal-action" id="modal-action"></button>
         </div>
       </div>
     </div>

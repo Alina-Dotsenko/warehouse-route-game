@@ -50,7 +50,6 @@ const COLORS = {
   cargo: '#3478d4',
   cargoLight: '#72a8ee',
   cargoDark: '#1e4f96',
-  impact: '#ff2d92',
 };
 
 export class Gosha {
@@ -242,13 +241,30 @@ export class Gosha {
 
     ctx.restore();
 
-    if (bumping) this._drawImpact(ctx, px, py - H * 0.45, H, now);
-
     if (this.phase === 'bump' || this.phase === 'through') {
       const t = (now - this.startedAt) / this.duration;
       const alpha = Math.min(1, t * 5) * Math.min(1, (1 - t) * 6 + 0.35);
       this._drawBubble(ctx, px, py - H * 1.05, H, this.pass ? SAY.pass : SAY.block, this.pass, alpha);
     }
+  }
+
+  /**
+   * Промо-сцена для приветственных экранов. Использует те же слои, что и
+   * персонаж на карте: корпус, шагающие ноги, рохлю, груз и колёса. Так
+   * иллюстрация в меню не расходится с тем, что игрок затем видит в уровне.
+   */
+  drawShowcase(ctx, x, floorY, H, now) {
+    if (!this.ready) return;
+
+    const stepPhase = now / 360;
+    const wheelPhase = now / 85;
+
+    ctx.save();
+    ctx.translate(x, floorY);
+    this._drawPallet(ctx, H, wheelPhase);
+    this._drawLegs(ctx, H, stepPhase, false);
+    this._drawBody(ctx, H, stepPhase);
+    ctx.restore();
   }
 
   /** Реплика Гоши: светлое облачко с хвостиком, направленным на него. */
@@ -409,8 +425,8 @@ export class Gosha {
     ctx.stroke();
 
     // Рулевой и грузовой ролики.
-    wheel(head - H * 0.035, floorY, Math.max(2.2, H * 0.072), -wheelPhase);
-    wheel(tail + H * 0.095, floorY, Math.max(1.7, H * 0.047), -wheelPhase * 1.48);
+    wheel(head - H * 0.035, floorY, Math.max(2.2, H * 0.072), wheelPhase);
+    wheel(tail + H * 0.095, floorY, Math.max(1.7, H * 0.047), wheelPhase * 1.48);
 
     // Гидроузел и настоящий петлевой хват вместо одной наклонной палочки.
     const gripX = -H * 0.27;
@@ -450,53 +466,90 @@ export class Gosha {
   /** Две ноги в рабочем комбинезоне идут в противофазе. */
   _drawLegs(ctx, H, phase, standing = false) {
     const legH = H * LEG_RATIO;
-    const hipY = -legH * 1.05;
+    const hipY = -legH * 1.08;
 
     ctx.save();
     ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
 
     for (let i = 0; i < 2; i++) {
-      const stride = standing
-        ? (i === 0 ? -legH * 0.12 : legH * 0.12)
-        : Math.sin(phase + i * Math.PI) * legH * 0.55;
-      const lift = standing ? 0 : Math.max(0, Math.sin(phase + i * Math.PI)) * legH * 0.2;
-      const hipX = (i === 0 ? -1 : 1) * H * 0.055;
-      const cuffX = hipX + stride * 0.58;
-      const cuffY = -legH * 0.48 - lift * 0.38;
-      const footX = hipX + stride;
-      const footY = -lift;
+      const side = i === 0 ? -1 : 1;
+      const motion = standing ? 0 : Math.sin(phase + i * Math.PI);
+      // У каждой ноги своя половина силуэта. Небольшой ход внутри неё даёт
+      // читаемый шаг, но голени больше не могут пересечься крест-накрест.
+      const stride = motion * legH * 0.13;
+      const lift = standing ? 0 : Math.max(0, motion) * legH * 0.18;
+      const hipX = side * H * 0.085;
+      const cuffX = side * H * 0.095 + stride * 0.35;
+      const cuffY = -legH * 0.56 - lift * 0.25;
+      const ankleX = side * H * 0.105 + stride;
+      const ankleY = -H * 0.022 - lift;
 
-      // Дальняя нога темнее; двойной штрих добавляет шов и объём штанине.
+      // Короткие раздельные штанины повторяют низ комбинезона из исходного
+      // Гоши, вместо двух длинных диагоналей, которые раньше образовывали X.
       ctx.strokeStyle = COLORS.pantsEdge;
-      ctx.lineWidth = Math.max(4, H * 0.115);
+      ctx.lineWidth = Math.max(4, H * 0.095);
       ctx.beginPath();
       ctx.moveTo(hipX, hipY);
-      ctx.quadraticCurveTo(hipX + stride * 0.25, -legH * 0.77, cuffX, cuffY);
+      ctx.quadraticCurveTo(hipX + stride * 0.12, -legH * 0.8, cuffX, cuffY);
       ctx.stroke();
       ctx.strokeStyle = i === 0 ? COLORS.pants : COLORS.pantsLight;
-      ctx.lineWidth = Math.max(3, H * 0.087);
+      ctx.lineWidth = Math.max(3, H * 0.069);
       ctx.stroke();
 
-      // Жёлтая голень и отдельная перепончатая лапа.
+      // Тонкая почти вертикальная голень — как у полноразмерного Гоши из
+      // Pac-Man. Дальняя нога чуть темнее, чтобы обе читались раздельно.
       ctx.strokeStyle = i === 0 ? COLORS.legShade : COLORS.leg;
-      ctx.lineWidth = Math.max(2, H * 0.043);
+      ctx.lineWidth = Math.max(2, H * 0.038);
       ctx.beginPath();
-      ctx.moveTo(cuffX, cuffY + H * 0.015);
-      ctx.quadraticCurveTo(cuffX + stride * 0.18, -legH * 0.2 - lift * 0.65, footX, footY - H * 0.025);
+      ctx.moveTo(cuffX, cuffY + H * 0.012);
+      ctx.quadraticCurveTo(
+        cuffX + stride * 0.12,
+        -legH * 0.24 - lift * 0.55,
+        ankleX,
+        ankleY - H * 0.015,
+      );
       ctx.stroke();
 
-      const footLen = legH * 0.66;
-      const footGrad = ctx.createLinearGradient(footX, footY - H * 0.04, footX + footLen, footY);
+      // Широкая перепончатая лапа. В спокойной стойке и во время шага дальняя
+      // направлена назад, ближняя — вперёд, как на исходном полном силуэте.
+      const footLen = legH * 0.88;
+      const heel = legH * 0.2;
+      ctx.save();
+      ctx.translate(ankleX, ankleY);
+      ctx.scale(side, 1);
+
+      const footGrad = ctx.createLinearGradient(-heel, -H * 0.035, footLen, H * 0.02);
       footGrad.addColorStop(0, i === 0 ? COLORS.legShade : COLORS.leg);
       footGrad.addColorStop(1, '#ffd83b');
       ctx.fillStyle = footGrad;
       ctx.beginPath();
-      ctx.moveTo(footX - legH * 0.16, footY - H * 0.025);
-      ctx.quadraticCurveTo(footX + legH * 0.06, footY - H * 0.055, footX + footLen, footY - H * 0.012);
-      ctx.quadraticCurveTo(footX + footLen * 0.86, footY + H * 0.018, footX + footLen * 0.48, footY + H * 0.014);
-      ctx.lineTo(footX - legH * 0.08, footY + H * 0.008);
+      ctx.moveTo(-heel, -H * 0.018);
+      ctx.bezierCurveTo(
+        footLen * 0.12,
+        -H * 0.045,
+        footLen * 0.62,
+        -H * 0.035,
+        footLen,
+        -H * 0.006,
+      );
+      // Три мягких выступа формируют узнаваемую гусиную перепонку.
+      ctx.quadraticCurveTo(footLen * 0.92, H * 0.018, footLen * 0.74, H * 0.014);
+      ctx.quadraticCurveTo(footLen * 0.62, H * 0.035, footLen * 0.48, H * 0.015);
+      ctx.quadraticCurveTo(footLen * 0.33, H * 0.034, footLen * 0.17, H * 0.012);
+      ctx.lineTo(-heel * 0.62, H * 0.007);
       ctx.closePath();
       ctx.fill();
+
+      ctx.strokeStyle = 'rgba(193, 132, 0, 0.48)';
+      ctx.lineWidth = Math.max(0.8, H * 0.007);
+      for (const toe of [0.42, 0.66]) {
+        ctx.beginPath();
+        ctx.moveTo(footLen * toe, -H * 0.006);
+        ctx.lineTo(footLen * (toe + 0.07), H * 0.012);
+        ctx.stroke();
+      }
+      ctx.restore();
     }
 
     ctx.restore();
@@ -523,18 +576,49 @@ export class Gosha {
     ctx.restore();
   }
 
-  _drawImpact(ctx, px, py, H, now) {
-    const k = 1 - (now - this.startedAt) / this.duration;
-    const r = H * (0.3 + (1 - k) * 0.26);
-    ctx.save();
-    ctx.globalAlpha = Math.max(0, k);
-    ctx.strokeStyle = COLORS.impact;
-    ctx.lineWidth = 3;
-    ctx.beginPath();
-    ctx.arc(px, py, r, 0, Math.PI * 2);
-    ctx.stroke();
-    ctx.restore();
-  }
+}
+
+/**
+ * Запускает лёгкие прозрачные Canvas-превью на текущем экране. Цикл сам
+ * завершится после замены DOM, поэтому при переходе в игру ничего чистить не
+ * требуется.
+ */
+export function mountGoshaShowcases(root = document) {
+  root.querySelectorAll('[data-gosha-showcase]').forEach((canvas) => {
+    const gosha = new Gosha();
+    const ctx = canvas.getContext('2d');
+    let lastWidth = 0;
+    let lastHeight = 0;
+
+    const frame = (now) => {
+      if (!canvas.isConnected) return;
+
+      const width = Math.max(1, canvas.clientWidth);
+      const height = Math.max(1, canvas.clientHeight);
+      const dpr = Math.min(window.devicePixelRatio || 1, 2);
+
+      if (width !== lastWidth || height !== lastHeight) {
+        canvas.width = Math.round(width * dpr);
+        canvas.height = Math.round(height * dpr);
+        lastWidth = width;
+        lastHeight = height;
+      }
+
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      ctx.clearRect(0, 0, width, height);
+
+      const H = Math.min(height * 0.9, width / 1.92);
+      const x = H * 1.48 + Math.max(0, (width - H * 1.9) * 0.5);
+      // Колёса рисуются вокруг линии пола и выступают ниже неё. Оставляем им
+      // запас внутри Canvas, чтобы нижняя кромка шины не обрезалась.
+      const floorY = height - H * 0.09;
+      gosha.drawShowcase(ctx, x, floorY, H, now);
+
+      requestAnimationFrame(frame);
+    };
+
+    requestAnimationFrame(frame);
+  });
 }
 
 /**
