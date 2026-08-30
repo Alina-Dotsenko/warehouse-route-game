@@ -17,14 +17,7 @@ const getPlayer = () => localStorage.getItem(STORE_NAME) || '';
 
 // Браузер запрещает звук до действия пользователя, поэтому контекст создаём
 // на первом же клике по странице, а не при загрузке.
-document.addEventListener(
-  'pointerdown',
-  () => {
-    sound.unlock();
-    if (!sound.muted) sound.startMusic();
-  },
-  { once: true }
-);
+document.addEventListener('pointerdown', () => sound.unlock(), { once: true });
 const getProgress = () => parseInt(localStorage.getItem(STORE_PROGRESS), 10) || 0;
 
 /** Освобождаем canvas и его слушатели перед сменой экрана. */
@@ -202,9 +195,7 @@ function renderGameScreen() {
 
   btnSound.addEventListener('click', () => {
     sound.unlock();
-    const muted = sound.toggleMuted();
-    if (muted) sound.stopMusic();
-    else sound.startMusic();
+    sound.toggleMuted();
     syncSoundBtn();
   });
 
