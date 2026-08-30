@@ -102,7 +102,6 @@ function renderGameScreen() {
   const hintBox = document.getElementById('hint-box');
   const sheet = document.getElementById('sheet');
   const sheetToggle = document.getElementById('sheet-toggle');
-  const mapTip = document.getElementById('map-tip');
   const modal = document.getElementById('result-modal');
 
   const setSheetOpen = (open) => {
@@ -146,15 +145,6 @@ function renderGameScreen() {
   map.setLevel(level);
   map.startAnimation();
 
-
-  const dismissTip = () => {
-    mapTip.classList.add('is-hidden');
-    canvas.removeEventListener('pointerdown', dismissTip);
-    canvas.removeEventListener('wheel', dismissTip);
-  };
-  canvas.addEventListener('pointerdown', dismissTip);
-  canvas.addEventListener('wheel', dismissTip, { passive: true });
-  setTimeout(dismissTip, 6000);
 
   btnZoomIn.addEventListener('click', () => map.zoomBy(1.6));
   btnZoomOut.addEventListener('click', () => map.zoomBy(1 / 1.6));

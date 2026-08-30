@@ -151,7 +151,8 @@ export function gameScreen({ level, levelIndex, levelCount }) {
 
       <div class="game-body">
         <div class="map-stage" id="map-stage">
-        <canvas class="map-canvas" id="map-canvas"></canvas>
+          <canvas class="map-canvas" id="map-canvas"></canvas>
+
           <div class="map-controls">
             <button class="icon-btn map-ctl" id="btn-zoom-in" title="Приблизить" aria-label="Приблизить">+</button>
             <button class="icon-btn map-ctl" id="btn-zoom-out" title="Отдалить" aria-label="Отдалить">−</button>
@@ -160,11 +161,6 @@ export function gameScreen({ level, levelIndex, levelCount }) {
 
           <div class="map-action">
             <button class="btn btn-primary btn-verify" id="btn-verify" disabled>Проверить решение</button>
-          </div>
-
-          <div class="map-tip" id="map-tip">
-            <span class="tip-desktop">Колесо — масштаб, перетаскивание — сдвиг, клик — выбор шкафа</span>
-            <span class="tip-touch">Два пальца — масштаб, один — сдвиг, касание — выбор шкафа</span>
           </div>
         </div>
 

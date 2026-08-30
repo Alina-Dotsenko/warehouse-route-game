@@ -778,43 +778,6 @@ summary::-webkit-details-marker {
   opacity: 1;
 }
 
-.map-tip {
-  position: absolute;
-  left: 50%;
-  bottom: calc(var(--sp-4) + 48px + var(--sp-3));
-  transform: translateX(-50%);
-  padding: var(--sp-2) var(--sp-4);
-  border-radius: var(--r-full);
-  background: var(--surface);
-  border: 1px solid var(--line-strong);
-  box-shadow: var(--shadow-md);
-  font-size: 0.8125rem;
-  color: var(--text-dim);
-  pointer-events: none;
-  white-space: nowrap;
-  max-width: calc(100% - var(--sp-6));
-  overflow: hidden;
-  text-overflow: ellipsis;
-  transition: opacity 0.4s;
-}
-
-.map-tip.is-hidden {
-  opacity: 0;
-}
-
-.tip-touch {
-  display: none;
-}
-
-@media (hover: none) and (pointer: coarse) {
-  .tip-desktop {
-    display: none;
-  }
-  .tip-touch {
-    display: inline;
-  }
-}
-
 /* Шторка ------------------------------------------------------------------ */
 
 .sheet {
@@ -1196,13 +1159,6 @@ summary::-webkit-details-marker {
 
   .btn-verify {
     font-size: 0.9375rem;
-  }
-
-  .map-tip {
-    font-size: 0.75rem;
-    white-space: normal;
-    text-align: center;
-    max-width: calc(100% - var(--sp-5));
   }
 }
 
