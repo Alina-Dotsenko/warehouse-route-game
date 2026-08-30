@@ -87,7 +87,6 @@ function renderGameScreen() {
 
   const total = level.solutionData.count;
 
-  const screen = app.querySelector('.screen-game');
   const canvas = document.getElementById('map-canvas');
   const selCount = document.getElementById('sel-count');
   const selChip = document.getElementById('sel-chip');
@@ -144,33 +143,9 @@ function renderGameScreen() {
     onViewChange: updateViewUI,
   });
 
-  // Обвязка лежит поверх карты, поэтому «вписать» должно укладывать склад в
-  // свободную середину. Полосы меряем по факту: их высота зависит от ширины
-  // экрана, переноса кнопок и вырезов, захардкоженные числа тут разъезжаются.
-  const stage = document.getElementById('map-stage');
-  const tools = screen.querySelector('.hud-tools');
-  const action = screen.querySelector('.hud-action');
-
-  const applyInsets = () => {
-    const box = stage.getBoundingClientRect();
-    if (box.height === 0) return;
-    // Считаем только полосы во всю ширину. Зум прижат к правому углу, и
-    // держать под него отступ по всему низу — значит зря ужимать карту.
-    const top = tools.getBoundingClientRect().bottom - box.top;
-    const bottom = box.bottom - action.getBoundingClientRect().top;
-    map.setViewInsets({
-      top: Math.max(0, top) + 8,
-      bottom: Math.max(0, bottom) + 8,
-      left: 0,
-      right: 0,
-    });
-  };
-
-  applyInsets();
   map.setLevel(level);
   map.startAnimation();
 
-  window.addEventListener('resize', applyInsets);
 
   const dismissTip = () => {
     mapTip.classList.add('is-hidden');
@@ -180,19 +155,6 @@ function renderGameScreen() {
   canvas.addEventListener('pointerdown', dismissTip);
   canvas.addEventListener('wheel', dismissTip, { passive: true });
   setTimeout(dismissTip, 6000);
-
-  // Пока карту тащат, панели притухают, чтобы не загораживали обзор.
-  let panTimer = null;
-  canvas.addEventListener('pointerdown', () => {
-    clearTimeout(panTimer);
-    screen.classList.add('is-panning');
-  });
-  const endPan = () => {
-    clearTimeout(panTimer);
-    panTimer = setTimeout(() => screen.classList.remove('is-panning'), 180);
-  };
-  canvas.addEventListener('pointerup', endPan);
-  canvas.addEventListener('pointercancel', endPan);
 
   btnZoomIn.addEventListener('click', () => map.zoomBy(1.6));
   btnZoomOut.addEventListener('click', () => map.zoomBy(1 / 1.6));
@@ -291,9 +253,13 @@ function showResult(modal, level, isCorrect) {
     text.textContent =
       'Эти шкафы не объясняют разницу маршрутов. Переключитесь на «Желаемый маршрут» и посмотрите, где он проходит там, где получившийся — нет.';
     action.textContent = 'Попробовать снова';
-    action.onclick = () => modal.classList.remove('is-open');
+    action.onclick = () => {
+      modal.classList.remove('is-open');
+      if (map) map.startAnimation();
+    };
   }
 
+  if (map) map.stopAnimation();
   modal.classList.add('is-open');
   action.focus();
 }

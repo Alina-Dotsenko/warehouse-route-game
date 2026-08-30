@@ -126,20 +126,14 @@ export function gameScreen({ level, levelIndex, levelCount }) {
 
   return `
     <div class="screen screen-game">
-      <div class="map-stage" id="map-stage">
-        <canvas class="map-canvas" id="map-canvas"></canvas>
-
-        <div class="hud hud-top">
-          <div class="hud-pill" id="sel-chip">
-            <span class="pill-level">Уровень ${levelIndex + 1}/${levelCount}</span>
-            <span class="pill-sep" aria-hidden="true"></span>
-            <span class="pill-count">Выбрано <b id="sel-count">0</b>/<span id="sel-total">${total}</span></span>
-          </div>
-          <div class="hud-spacer"></div>
-          <button class="hud-btn" id="btn-quit" title="Выйти в меню" aria-label="Выйти в меню">✕</button>
+      <header class="game-header">
+        <div class="hud-pill" id="sel-chip">
+          <span class="pill-level">Уровень ${levelIndex + 1}/${levelCount}</span>
+          <span class="pill-sep" aria-hidden="true"></span>
+          <span class="pill-count">Выбрано <b id="sel-count">0</b>/<span id="sel-total">${total}</span></span>
         </div>
 
-        <div class="hud hud-tools">
+        <div class="header-tools">
           <div class="segmented" role="tablist" aria-label="Маршрут">
             <button class="seg-btn is-active" id="btn-route-bad" role="tab" aria-selected="true">
               <span class="dot dot-bad"></span><span class="seg-label">Как есть</span>
@@ -148,25 +142,31 @@ export function gameScreen({ level, levelIndex, levelCount }) {
               <span class="dot dot-good"></span><span class="seg-label">Как надо</span>
             </button>
           </div>
-          <button class="hud-btn" id="btn-hint" title="Подсказка" aria-label="Подсказка"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 18h6M10 22h4"/><path d="M12 2a7 7 0 0 0-4 12.7V17h8v-2.3A7 7 0 0 0 12 2Z"/></svg></button>
-          <button class="hud-btn" id="btn-clear-selection" title="Сбросить выбор" aria-label="Сбросить выбор" disabled>↺</button>
+          <button class="icon-btn" id="btn-hint" title="Подсказка" aria-label="Подсказка"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 18h6M10 22h4"/><path d="M12 2a7 7 0 0 0-4 12.7V17h8v-2.3A7 7 0 0 0 12 2Z"/></svg></button>
+          <button class="icon-btn" id="btn-clear-selection" title="Сбросить выбор" aria-label="Сбросить выбор" disabled>↺</button>
         </div>
 
-        <div class="map-controls">
-          <button class="map-ctl" id="btn-zoom-in" title="Приблизить" aria-label="Приблизить">+</button>
-          <button class="map-ctl" id="btn-zoom-out" title="Отдалить" aria-label="Отдалить">−</button>
-          <button class="map-ctl" id="btn-zoom-fit" title="Показать весь склад" aria-label="Показать весь склад">⤢</button>
-        </div>
+        <button class="icon-btn btn-quit" id="btn-quit" title="Выйти в меню" aria-label="Выйти в меню">✕</button>
+      </header>
 
-        <div class="map-tip" id="map-tip">
-          <span class="tip-desktop">Колесо — масштаб, перетаскивание — сдвиг, клик — выбор шкафа</span>
-          <span class="tip-touch">Два пальца — масштаб, один — сдвиг, касание — выбор шкафа</span>
-        </div>
+      <div class="game-body">
+        <div class="map-stage" id="map-stage">
+        <canvas class="map-canvas" id="map-canvas"></canvas>
+          <div class="map-controls">
+            <button class="icon-btn map-ctl" id="btn-zoom-in" title="Приблизить" aria-label="Приблизить">+</button>
+            <button class="icon-btn map-ctl" id="btn-zoom-out" title="Отдалить" aria-label="Отдалить">−</button>
+            <button class="icon-btn map-ctl" id="btn-zoom-fit" title="Показать весь склад" aria-label="Показать весь склад">⤢</button>
+          </div>
 
-        <div class="hud hud-action">
-          <button class="btn btn-primary btn-verify" id="btn-verify" disabled></button>
+          <div class="map-action">
+            <button class="btn btn-primary btn-verify" id="btn-verify" disabled>Проверить решение</button>
+          </div>
+
+          <div class="map-tip" id="map-tip">
+            <span class="tip-desktop">Колесо — масштаб, перетаскивание — сдвиг, клик — выбор шкафа</span>
+            <span class="tip-touch">Два пальца — масштаб, один — сдвиг, касание — выбор шкафа</span>
+          </div>
         </div>
-      </div>
 
       <div class="sheet" id="sheet">
         <button class="sheet-handle" id="sheet-toggle" aria-expanded="false" aria-controls="sheet-body">
@@ -197,6 +197,7 @@ export function gameScreen({ level, levelIndex, levelCount }) {
             </ul>
           </div>
         </div>
+      </div>
       </div>
 
       <div class="modal-backdrop" id="result-modal">
