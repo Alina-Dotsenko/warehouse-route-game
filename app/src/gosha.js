@@ -183,9 +183,13 @@ export class Gosha {
     if (this.phase === 'bump' && t >= 1) this._finish();
   }
 
+  /**
+   * Сцена доиграна. Гоша остаётся стоять там, где закончил, — не в начале
+   * маршрута: камера в этот момент наведена на шкаф, и возврат к началу
+   * попросту уносил его за край экрана.
+   */
   _finish() {
     this.phase = 'idle';
-    this.dist = 0;
     const done = this.onDone;
     this.onDone = null;
     done?.();

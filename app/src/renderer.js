@@ -338,10 +338,9 @@ export class TopologyMap {
     const { path, targetDist } = buildApproach(pts, target);
 
     return new Promise((resolve) => {
-      this.gosha.start(path, targetDist, pass, onOutcome, () => {
-        this.gosha.idle(this.routes[this.activeRoute]);
-        resolve();
-      });
+      // По завершении Гоша остаётся стоять у шкафа: idle() вернул бы его в
+      // начало маршрута, за пределы кадра.
+      this.gosha.start(path, targetDist, pass, onOutcome, resolve);
       this.startAnimation();
     });
   }
