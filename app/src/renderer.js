@@ -306,7 +306,7 @@ export class TopologyMap {
     this.grid = new SpatialGrid(this.cabinets);
 
     this.selected = new Set();
-    this.gosha.stop();
+    this.gosha.idle(this.routes[this.activeRoute]);
 
     this.resize();
     this.fit();
@@ -315,6 +315,7 @@ export class TopologyMap {
 
   setActiveRoute(kind) {
     this.activeRoute = kind;
+    if (this.gosha.phase === 'idle') this.gosha.idle(this.routes[kind]);
     this.requestDraw();
   }
 
@@ -336,7 +337,10 @@ export class TopologyMap {
     const { path, targetDist } = buildApproach(pts, target);
 
     return new Promise((resolve) => {
-      this.gosha.start(path, targetDist, pass, resolve);
+      this.gosha.start(path, targetDist, pass, () => {
+        this.gosha.idle(this.routes[this.activeRoute]);
+        resolve();
+      });
       this.startAnimation();
     });
   }

@@ -107,6 +107,18 @@ export class Gosha {
     this.visible = true;
   }
 
+  /**
+   * Ожидание: Гоша стоит в начале маршрута. Без этого он существовал только
+   * три секунды во время проверки, и на карте его было попросту не найти.
+   */
+  idle(points) {
+    this._measure(points);
+    this.dist = 0;
+    this.phase = 'idle';
+    this.onDone = null;
+    this.visible = this.total > 0;
+  }
+
   stop() {
     this.visible = false;
     this.phase = null;
@@ -134,7 +146,7 @@ export class Gosha {
   }
 
   update(now) {
-    if (!this.visible || !this.phase) return;
+    if (!this.visible || !this.phase || this.phase === 'idle') return;
 
     const t = Math.min(1, (now - this.startedAt) / this.duration);
 
@@ -166,7 +178,8 @@ export class Gosha {
   }
 
   _finish() {
-    this.phase = null;
+    this.phase = 'idle';
+    this.dist = 0;
     const done = this.onDone;
     this.onDone = null;
     done?.();
@@ -192,6 +205,7 @@ export class Gosha {
 
     // Фаза шага привязана к пройденному пути: стоя на месте после удара Гоша
     // не перебирает ногами.
+    const standing = this.phase === 'idle';
     const stepPhase = (this.dist / STRIDE) * Math.PI * 2;
     const goingLeft = at.dx < 0;
 
@@ -200,8 +214,9 @@ export class Gosha {
     if (goingLeft) ctx.scale(-1, 1);
 
     this._drawPallet(ctx, H);
-    this._drawLegs(ctx, H, stepPhase);
-    this._drawBody(ctx, H, stepPhase);
+    this._drawLegs(ctx, H, stepPhase, standing);
+    // Стоя Гоша чуть покачивается — иначе выглядит забытой на карте меткой.
+    this._drawBody(ctx, H, standing ? now / 900 : stepPhase);
 
     ctx.restore();
 
@@ -291,7 +306,7 @@ export class Gosha {
   }
 
   /** Две ноги в противофазе: простой шаг, читаемый даже на 34 пикселях. */
-  _drawLegs(ctx, H, phase) {
+  _drawLegs(ctx, H, phase, standing = false) {
     const legH = H * LEG_RATIO;
     const hipY = -legH;
     const swing = legH * 0.55;
@@ -301,8 +316,10 @@ export class Gosha {
     ctx.lineWidth = Math.max(1.8, H * 0.05);
 
     for (let i = 0; i < 2; i++) {
-      const p = phase + i * Math.PI;
-      const footX = Math.sin(p) * swing;
+      // Стоя ноги слегка расставлены, иначе они сливаются в одну.
+      const footX = standing
+        ? (i === 0 ? -swing * 0.3 : swing * 0.3)
+        : Math.sin(phase + i * Math.PI) * swing;
       ctx.strokeStyle = i === 0 ? COLORS.legDark : COLORS.leg;
       ctx.beginPath();
       ctx.moveTo(0, hipY);
