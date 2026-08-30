@@ -191,6 +191,11 @@ export function gameScreen({ level, levelIndex, levelCount }) {
               <li class="legend-row"><span class="swatch swatch-route-bad"></span><span>Получившийся маршрут</span></li>
               <li class="legend-row"><span class="swatch swatch-route-good"></span><span>Желаемый маршрут</span></li>
             </ul>
+
+            <p class="sheet-controls">
+              <span class="ctl-desktop">Колесо мыши — масштаб, перетаскивание — сдвиг, клик по шкафу — выбрать или снять выбор.</span>
+              <span class="ctl-touch">Два пальца — масштаб, один — сдвиг, касание шкафа — выбрать или снять выбор.</span>
+            </p>
           </div>
         </div>
       </div>

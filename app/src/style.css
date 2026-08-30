@@ -932,6 +932,29 @@ summary::-webkit-details-marker {
   height: 4px;
 }
 
+.sheet-controls {
+  margin-top: var(--sp-3);
+  padding-top: var(--sp-3);
+  border-top: 1px solid var(--line);
+  font-size: 0.8125rem;
+  line-height: 1.5;
+  color: var(--text-faint);
+}
+
+/* Показываем ту формулировку, которая соответствует способу ввода. */
+.ctl-touch {
+  display: none;
+}
+
+@media (hover: none) and (pointer: coarse) {
+  .ctl-desktop {
+    display: none;
+  }
+  .ctl-touch {
+    display: inline;
+  }
+}
+
 /* ==========================================================================
    Модалка результата
    ========================================================================== */
