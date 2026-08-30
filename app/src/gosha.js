@@ -216,10 +216,15 @@ export class Gosha {
     ctx.translate(px, py);
     if (goingLeft) ctx.scale(-1, 1);
 
+    const bodyPhase = standing ? now / 900 : stepPhase;
     this._drawPallet(ctx, H, wheelPhase);
-    this._drawLegs(ctx, H, stepPhase, standing);
+    this._drawLegs(ctx, H, stepPhase, standing, 'rear');
     // Стоя Гоша чуть покачивается — иначе выглядит забытой на карте меткой.
-    this._drawBody(ctx, H, standing ? now / 900 : stepPhase);
+    this._drawBody(ctx, H, bodyPhase);
+    this._drawLegs(ctx, H, stepPhase, standing, 'front');
+    this._drawHandle(ctx, H);
+    this._drawFrontWing(ctx, H, bodyPhase);
+    this._drawGripFront(ctx, H);
 
     ctx.restore();
 
@@ -254,8 +259,12 @@ export class Gosha {
     ctx.save();
     ctx.translate(x, floorY);
     this._drawPallet(ctx, H, wheelPhase);
-    this._drawLegs(ctx, H, stepPhase, false);
+    this._drawLegs(ctx, H, stepPhase, false, 'rear');
     this._drawBody(ctx, H, stepPhase);
+    this._drawLegs(ctx, H, stepPhase, false, 'front');
+    this._drawHandle(ctx, H);
+    this._drawFrontWing(ctx, H, stepPhase);
+    this._drawGripFront(ctx, H);
     ctx.restore();
   }
 
@@ -473,9 +482,8 @@ export class Gosha {
     wheel(head - H * 0.035, floorY, Math.max(2.2, H * 0.072), wheelPhase);
     wheel(tail + H * 0.095, floorY, Math.max(1.7, H * 0.047), wheelPhase * 1.48);
 
-    // Гидроузел и настоящий петлевой хват вместо одной наклонной палочки.
-    const gripX = -H * 0.27;
-    const gripY = -H * 0.53;
+    // Гидроузел остаётся частью рохли. Сама рукоять рисуется отдельным
+    // передним слоем после корпуса, чтобы хвост Гоши её не перекрывал.
     ctx.fillStyle = COLORS.jackDark;
     rounded(head - H * 0.08, deckY - H * 0.08, H * 0.16, H * 0.18, H * 0.035);
     ctx.fill();
@@ -483,12 +491,30 @@ export class Gosha {
     rounded(head - H * 0.048, deckY - H * 0.055, H * 0.096, H * 0.11, H * 0.025);
     ctx.fill();
 
+    ctx.restore();
+  }
+
+  /**
+   * Рукоять лежит поверх хвоста, но под крылом. Так она остаётся физически
+   * связанной с рохлей и одновременно выглядит зажатой в ладони Гоши.
+   */
+  _drawHandle(ctx, H) {
+    const head = -H * 0.54;
+    const deckY = -H * 0.155;
+    const gripX = -H * 0.15;
+    const gripY = -H * 0.405;
+
+    ctx.save();
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+
     ctx.strokeStyle = COLORS.steelDark;
     ctx.lineWidth = Math.max(3, H * 0.045);
     ctx.beginPath();
     ctx.moveTo(head, deckY - H * 0.02);
     ctx.quadraticCurveTo(-H * 0.45, -H * 0.33, gripX, gripY);
     ctx.stroke();
+
     ctx.strokeStyle = COLORS.steel;
     ctx.lineWidth = Math.max(1, H * 0.012);
     ctx.beginPath();
@@ -499,7 +525,7 @@ export class Gosha {
     ctx.strokeStyle = COLORS.wheel;
     ctx.lineWidth = Math.max(3, H * 0.04);
     ctx.beginPath();
-    ctx.ellipse(gripX, gripY, H * 0.13, H * 0.07, -0.25, 0, Math.PI * 2);
+    ctx.ellipse(gripX, gripY, H * 0.085, H * 0.052, -0.25, 0, Math.PI * 2);
     ctx.stroke();
     ctx.strokeStyle = COLORS.wheelSide;
     ctx.lineWidth = Math.max(1, H * 0.012);
@@ -508,16 +534,23 @@ export class Gosha {
     ctx.restore();
   }
 
-  /** Две ноги в рабочем комбинезоне идут в противофазе. */
-  _drawLegs(ctx, H, phase, standing = false) {
+  /**
+   * Ноги идут в противофазе и рисуются двумя проходами: дальняя до корпуса,
+   * ближняя после. Это создаёт правильную глубину без пересечения силуэтов.
+   */
+  _drawLegs(ctx, H, phase, standing = false, layer = 'both') {
     const legH = H * LEG_RATIO;
     const hipY = -legH * 1.08;
+    // У корпуса, повернутого вправо, левая на экране нога относится к
+    // ближней стороне (как и свисающее крыло). Поэтому именно i=0 должен
+    // перекрывать корпус, а не прятаться за ним.
+    const indices = layer === 'rear' ? [1] : layer === 'front' ? [0] : [0, 1];
 
     ctx.save();
     ctx.lineCap = 'round';
     ctx.lineJoin = 'round';
 
-    for (let i = 0; i < 2; i++) {
+    for (const i of indices) {
       const side = i === 0 ? -1 : 1;
       const motion = standing ? 0 : Math.sin(phase + i * Math.PI);
       // У каждой ноги своя половина силуэта. Небольшой ход внутри неё даёт
@@ -597,6 +630,70 @@ export class Gosha {
       ctx.restore();
     }
 
+    ctx.restore();
+  }
+
+  /**
+   * Возвращает поверх ближней ноги только свисающее крыло из исходного
+   * спрайта. Корпус остаётся под ногой: порядок слоёв получается именно
+   * «тело → нога → крыло», а не прячет ногу за всей фигурой.
+   */
+  _drawFrontWing(ctx, H, phase) {
+    const legH = H * LEG_RATIO;
+    const bodyH = H - legH;
+    const sourceW = this.body.naturalWidth || 227;
+    const sourceH = this.body.naturalHeight || 288;
+    const bodyW = bodyH * (sourceW / sourceH);
+    const bob = Math.abs(Math.sin(phase)) * H * 0.022;
+    const bodyX = -bodyW / 2;
+    const bodyY = -legH - bodyH + bob;
+
+    // Контур чуть шире крыла, чтобы не срезать сглаженный прозрачный край.
+    // Координаты нормализованы по исходному PNG и не зависят от масштаба.
+    const outline = [
+      [0.35, 0.29], [0.46, 0.31], [0.48, 0.43], [0.44, 0.54],
+      [0.46, 0.7], [0.45, 0.89], [0.42, 0.98], [0.36, 1],
+      [0.3, 0.98], [0.25, 0.92], [0.21, 0.81], [0.19, 0.69],
+      [0.19, 0.57], [0.21, 0.45], [0.25, 0.36], [0.31, 0.3],
+    ];
+
+    ctx.save();
+    ctx.beginPath();
+    outline.forEach(([nx, ny], index) => {
+      const x = bodyX + nx * bodyW;
+      const y = bodyY + ny * bodyH;
+      if (index === 0) ctx.moveTo(x, y);
+      else ctx.lineTo(x, y);
+    });
+    ctx.closePath();
+    ctx.clip();
+    ctx.imageSmoothingEnabled = true;
+    ctx.imageSmoothingQuality = 'high';
+    ctx.drawImage(this.body, bodyX, bodyY, bodyW, bodyH);
+    ctx.restore();
+  }
+
+  /**
+   * Ближняя половина петли проходит поверх кончика крыла. Задняя половина
+   * уже нарисована в рохле до корпуса, поэтому ладонь оказывается внутри
+   * ручки без дополнительного, визуально чужого крыла.
+   */
+  _drawGripFront(ctx, H) {
+    const gripX = -H * 0.15;
+    const gripY = -H * 0.405;
+
+    ctx.save();
+    ctx.translate(gripX, gripY);
+    ctx.rotate(-0.25);
+    ctx.lineCap = 'round';
+    ctx.strokeStyle = COLORS.wheel;
+    ctx.lineWidth = Math.max(3, H * 0.04);
+    ctx.beginPath();
+    ctx.ellipse(0, 0, H * 0.085, H * 0.052, 0, 0.05 * Math.PI, 0.95 * Math.PI);
+    ctx.stroke();
+    ctx.strokeStyle = COLORS.wheelSide;
+    ctx.lineWidth = Math.max(1, H * 0.012);
+    ctx.stroke();
     ctx.restore();
   }
 
