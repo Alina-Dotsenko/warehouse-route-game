@@ -14,6 +14,8 @@
  *   При таком сжатии шкаф 0.84 x 1.68 выглядит квадратом — как и задумано.
  */
 
+import { Gosha, findDivergence } from './gosha.js';
+
 const Y_SQUEEZE = 1;
 
 // Размеры мира в собственных единицах (ширина по X, высота по Y).
@@ -35,7 +37,7 @@ const MIN_PICK_MARKER_PX = 6;
 const COLORS = {
   outside: '#070c14',
   floor: '#132038',
-  floorLine: 'rgba(255,255,255,0.028)',
+  floorLine: 'rgba(255,255,255,0.05)',
   bounds: 'rgba(120,160,255,0.28)',
 
   // Обычный шкаф: светлый корпус с бликом по верхней грани и тенью по нижней —
@@ -67,6 +69,29 @@ const COLORS = {
   hintZone: 'rgba(250,204,21,0.16)',
   hintStroke: '#facc15',
 };
+
+/**
+ * Диагональная штриховка как CanvasPattern: рисовать её по каждому блоку
+ * отдельно слишком дорого (глухих блоков бывает больше восьмисот), а одним
+ * паттерном они заливаются за один вызов fill().
+ */
+let hatchPattern = null;
+function getHatch(ctx, base, line) {
+  if (hatchPattern) return hatchPattern;
+  const c = document.createElement('canvas');
+  c.width = c.height = 8;
+  const g = c.getContext('2d');
+  g.fillStyle = base;
+  g.fillRect(0, 0, 8, 8);
+  g.strokeStyle = line;
+  g.lineWidth = 1.5;
+  g.beginPath();
+  g.moveTo(-2, 6); g.lineTo(6, -2);
+  g.moveTo(2, 10); g.lineTo(10, 2);
+  g.stroke();
+  hatchPattern = ctx.createPattern(c, 'repeat');
+  return hatchPattern;
+}
 
 /** roundRect есть не везде — на старых движках падаем обратно на прямые углы. */
 const HAS_ROUND_RECT =
@@ -253,6 +278,9 @@ export class TopologyMap {
     this._pointers = new Map();
     this._gesture = null;
 
+    this.gosha = new Gosha();
+    this._lastTick = 0;
+
     this._bindEvents();
     this._observeResize();
   }
@@ -278,6 +306,11 @@ export class TopologyMap {
     this.grid = new SpatialGrid(this.cabinets);
 
     this.selected = new Set();
+    // Пока ошибка не найдена, Гоша упирается там, где ожидаемый маршрут
+    // расходится с получившимся.
+    this.solved = false;
+    this._syncGosha();
+
     this.resize();
     this.fit();
     this._emitSelection();
@@ -285,7 +318,24 @@ export class TopologyMap {
 
   setActiveRoute(kind) {
     this.activeRoute = kind;
+    this._syncGosha();
     this.requestDraw();
+  }
+
+  /** После верного ответа шкаф считается исправленным и Гоша проходит. */
+  setSolved(solved) {
+    this.solved = solved;
+    this._syncGosha();
+    this.requestDraw();
+  }
+
+  _syncGosha() {
+    const pts = this.routes[this.activeRoute];
+    // Упор имеет смысл только на желаемом маршруте: получившийся — это то,
+    // что система действительно построила, по нему Гоша проходит целиком.
+    const blocked = !this.solved && this.activeRoute === 'good';
+    const stop = blocked ? findDivergence(this.routes.bad, this.routes.good) : null;
+    this.gosha.setPath(pts, stop);
   }
 
   setHintZoneVisible(visible) {
@@ -604,9 +654,14 @@ export class TopologyMap {
   startAnimation() {
     if (this._animating) return;
     this._animating = true;
+    this._lastTick = performance.now();
     const tick = () => {
       if (!this._animating || this._destroyed) return;
+      const now = performance.now();
+      const dt = Math.min(now - this._lastTick, 50); // после сворачивания вкладки
+      this._lastTick = now;
       this._dashPhase -= 0.35;
+      this.gosha.update(dt, now);
       this.draw();
       this._raf = requestAnimationFrame(tick);
     };
@@ -647,6 +702,7 @@ export class TopologyMap {
 
     this._drawRoute(ctx, ox, oy, s, sy);
     this._drawSelectionMarkers(ctx, ox, oy, s, sy);
+    this.gosha.draw(ctx, ox, oy, s, sy, performance.now());
   }
 
   _drawBounds(ctx, ox, oy, s, sy) {
@@ -660,6 +716,31 @@ export class TopologyMap {
     ctx.save();
     ctx.fillStyle = COLORS.floor;
     ctx.fillRect(x, y, w, h);
+
+    // Разметка пола: шаг сетки равен шагу колонн стеллажей, поэтому проходы
+    // читаются как проходы, а не как пустая заливка.
+    const step = 5.04 * s;
+    if (step >= 14) {
+      ctx.save();
+      ctx.beginPath();
+      ctx.rect(x, y, w, h);
+      ctx.clip();
+      ctx.strokeStyle = COLORS.floorLine;
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      for (let gx = x; gx <= x + w; gx += step) {
+        ctx.moveTo(Math.round(gx) + 0.5, y);
+        ctx.lineTo(Math.round(gx) + 0.5, y + h);
+      }
+      const stepY = 5.04 * sy;
+      for (let gy = y; gy <= y + h; gy += stepY) {
+        ctx.moveTo(x, Math.round(gy) + 0.5);
+        ctx.lineTo(x + w, Math.round(gy) + 0.5);
+      }
+      ctx.stroke();
+      ctx.restore();
+    }
+
     ctx.strokeStyle = COLORS.bounds;
     ctx.lineWidth = 1.5;
     ctx.setLineDash([6, 5]);
@@ -742,7 +823,8 @@ export class TopologyMap {
     // Глухие блоки светлее пола, но темнее обычных шкафов, и всегда с контуром:
     // одной заливкой они терялись на фоне.
     if (blind.length > 0) {
-      ctx.fillStyle = COLORS.blind;
+      const hatched = minSide >= DETAIL_THRESHOLD_PX;
+      ctx.fillStyle = hatched ? getHatch(ctx, COLORS.blind, COLORS.blindEdge) : COLORS.blind;
       ctx.beginPath();
       for (const i of blind) addRect(cabs[i]);
       ctx.fill();
@@ -758,40 +840,67 @@ export class TopologyMap {
       return;
     }
 
-    // Блик по верхней грани и тень по нижней дают корпусу объём.
     const bevel = Math.max(1, Math.min(2.5, cellH * 0.1));
+    this._detailRacks(ctx, ox, oy, s, sy, normal, picks, bevel);
+    this._drawFacings(ctx, ox, oy, s, sy, x0, x1, y0, y1, minSide);
+  }
 
-    const bevelGroup = (list, topColor) => {
-      if (list.length === 0) return;
-      ctx.fillStyle = topColor;
+  /**
+   * Корпус стеллажа: блик по верхней грани, тень по нижней, контур и полки
+   * внутри. Полки появляются только когда между ними остаётся хотя бы
+   * несколько пикселей — иначе они сливаются в грязь.
+   */
+  _detailRacks(ctx, ox, oy, s, sy, normal, picks, bevel) {
+    const cabs = this.cabinets;
+    const all = normal.concat(picks);
+
+    const strip = (list, color, atBottom) => {
+      if (!list.length) return;
+      ctx.fillStyle = color;
       ctx.beginPath();
       for (const i of list) {
         const c = cabs[i];
-        ctx.rect(ox + c.x * s, oy + c.y * sy, c.w * s, bevel);
+        const y = atBottom ? oy + (c.y + c.h) * sy - bevel : oy + c.y * sy;
+        ctx.rect(ox + c.x * s, y, c.w * s, bevel);
       }
       ctx.fill();
     };
 
-    bevelGroup(normal, COLORS.cabinetTop);
-    bevelGroup(picks, COLORS.pickTop);
-
-    ctx.fillStyle = COLORS.cabinetShade;
-    ctx.beginPath();
-    for (const i of normal) {
-      const c = cabs[i];
-      ctx.rect(ox + c.x * s, oy + (c.y + c.h) * sy - bevel, c.w * s, bevel);
-    }
-    ctx.fill();
+    strip(normal, COLORS.cabinetTop, false);
+    strip(picks, COLORS.pickTop, false);
+    strip(normal, COLORS.cabinetShade, true);
 
     ctx.strokeStyle = COLORS.cabinetEdge;
     ctx.lineWidth = 1;
     ctx.beginPath();
-    for (const i of normal) addRect(cabs[i]);
-    for (const i of picks) addRect(cabs[i]);
+    for (const i of all) {
+      const c = cabs[i];
+      ctx.rect(ox + c.x * s, oy + c.y * sy, c.w * s, c.h * sy);
+    }
     ctx.stroke();
 
-    // Грань подхода — ключевая информация уровня: именно её разворот и есть
-    // та ошибка, которую ищет игрок. Рисуем с лёгким свечением наружу.
+    const shelfGap = (1.68 * sy) / 3;
+    if (shelfGap < 5) return;
+
+    ctx.strokeStyle = 'rgba(19,32,56,0.5)';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    for (const i of all) {
+      const c = cabs[i];
+      const px = ox + c.x * s;
+      const pw = c.w * s;
+      for (let k = 1; k < 3; k++) {
+        const py = Math.round(oy + (c.y + (c.h * k) / 3) * sy) + 0.5;
+        ctx.moveTo(px + 1, py);
+        ctx.lineTo(px + pw - 1, py);
+      }
+    }
+    ctx.stroke();
+  }
+
+  /** Грань подхода — ключевая информация уровня, рисуется поверх любого стиля. */
+  _drawFacings(ctx, ox, oy, s, sy, x0, x1, y0, y1, minSide) {
+    const cabs = this.cabinets;
     const stripe = Math.max(1.5, Math.min(3.5, minSide * 0.16));
     const facing = [];
     for (let k = 0; k < cabs.length; k++) {
@@ -802,34 +911,33 @@ export class TopologyMap {
     }
     if (facing.length === 0) return;
 
-    const facingRect = (c, thickness, outward) => {
+    const rect = (c, thickness, outward) => {
       const px = ox + c.x * s;
       const py = oy + c.y * sy;
       const pw = c.w * s;
       const ph = c.h * sy;
-      const o = outward;
       switch (c.facing) {
         case 'bottom':
-          return [px, py + ph - thickness + o, pw, thickness];
+          return [px, py + ph - thickness + outward, pw, thickness];
         case 'top':
-          return [px, py - o, pw, thickness];
+          return [px, py - outward, pw, thickness];
         case 'left':
-          return [px - o, py, thickness, ph];
+          return [px - outward, py, thickness, ph];
         default:
-          return [px + pw - thickness + o, py, thickness, ph];
+          return [px + pw - thickness + outward, py, thickness, ph];
       }
     };
 
     if (minSide >= 12) {
       ctx.fillStyle = COLORS.facingGlow;
       ctx.beginPath();
-      for (const k of facing) ctx.rect(...facingRect(cabs[k], stripe * 2.2, stripe));
+      for (const k of facing) ctx.rect(...rect(cabs[k], stripe * 2.2, stripe));
       ctx.fill();
     }
 
     ctx.fillStyle = COLORS.facing;
     ctx.beginPath();
-    for (const k of facing) ctx.rect(...facingRect(cabs[k], stripe, 0));
+    for (const k of facing) ctx.rect(...rect(cabs[k], stripe, 0));
     ctx.fill();
   }
 

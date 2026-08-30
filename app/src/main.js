@@ -182,7 +182,18 @@ function renderGameScreen() {
 
   btnVerify.addEventListener('click', async () => {
     const isCorrect = await checkSolution(level, map.getSelection());
-    showResult(modal, level, isCorrect);
+
+    if (isCorrect) {
+      // Ошибка найдена — шкаф считается исправленным: показываем желаемый
+      // маршрут и даём Гоше пройти там, где он раньше упирался.
+      setRoute('good');
+      map.setSolved(true);
+      setTimeout(() => showResult(modal, level, true), 1400);
+    } else {
+      // Пусть будет видно, обо что именно он спотыкается.
+      setRoute('good');
+      showResult(modal, level, false);
+    }
   });
 
   updateSelectionUI(new Set());
@@ -243,13 +254,9 @@ function showResult(modal, level, isCorrect) {
     text.textContent =
       'Эти шкафы не объясняют разницу маршрутов. Переключитесь на «Желаемый маршрут» и посмотрите, где он проходит там, где получившийся — нет.';
     action.textContent = 'Попробовать снова';
-    action.onclick = () => {
-      modal.classList.remove('is-open');
-      if (map) map.startAnimation();
-    };
+    action.onclick = () => modal.classList.remove('is-open');
   }
 
-  if (map) map.stopAnimation();
   modal.classList.add('is-open');
   action.focus();
 }
