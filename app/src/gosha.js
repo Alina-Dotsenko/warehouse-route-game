@@ -1,31 +1,30 @@
 /**
- * Гоша-дежурный, идущий по маршруту с рохлей.
+ * Гоша-дежурный: подходит к выбранному шкафу и либо проходит дальше, либо
+ * упирается в него.
  *
  * Спрайт взят из «Гоша Patch-goose» (соседний проект `games`, `gosha-dev.png`
  * — тот, что в наушниках и с бейджем, как раз дежурный). У исходника лапы
  * нарисованы статично, поэтому тело обрезано выше лап, развёрнуто вправо и
  * уменьшено до 128 пикселей, а ноги и рохля рисуются на канвасе — иначе шаг
  * не анимировать.
+ *
+ * Гоша живёт только во время проверки решения. Постоянно шагающая по всему
+ * маршруту фигура на общем плане занимала тридцать пикселей и терялась, а
+ * дойти до нужного места ей требовалось секунд двадцать.
  */
 
 import bodyUrl from './assets/gosha/gosha-body.png';
 
-/** Скорость в единицах мира за секунду: маршрут целиком — примерно за 20 с. */
-const SPEED = 14;
+// Сколько единиц мира Гоша проходит перед целью — чтобы был виден разбег.
+const RUN_UP = 26;
 
-/**
- * Насколько Гоша отходит от преграды перед новой попыткой. Начинать проход с
- * начала маршрута бессмысленно: до места, где топология ломается, он шагал бы
- * полминуты, а показать надо именно упор.
- */
-const RETREAT = 24;
+const RUN_MS = 1100;    // разбег до шкафа
+const THROUGH_MS = 700; // проход дальше при верном ответе
+const BUMP_MS = 850;    // упор при неверном
 
-const BUMP_MS = 900;
+const STRIDE = 3.2;     // длина шага в единицах мира
 
-// Длина шага в единицах мира — от неё считается фаза ног.
-const STRIDE = 3.2;
-
-const LEG_RATIO = 0.17;   // доля ног в полной высоте
+const LEG_RATIO = 0.17;
 const BODY_ASPECT = 78 / 128;
 
 const COLORS = {
@@ -48,25 +47,27 @@ export class Gosha {
     this.lengths = [];
     this.total = 0;
 
-    this.dist = 0;
-    this.dir = 1;
-    this.stopAt = null;
-    this.retreatTo = 0;
-    this.bumpUntil = 0;
     this.visible = false;
+    this.phase = null;   // 'run' | 'through' | 'bump'
+    this.dist = 0;
+    this.from = 0;
+    this.to = 0;
+    this.startedAt = 0;
+    this.duration = 0;
+    this.pass = false;
+    this.onDone = null;
   }
 
   get ready() {
     return this.body.complete && this.body.naturalWidth > 0;
   }
 
-  setPath(points, stopAtIndex = null) {
+  _measure(points) {
     this.path = points || [];
     this.lengths = [];
     this.total = 0;
-
     for (let i = 1; i < this.path.length; i++) {
-      // Сжатие по Y здесь не учитываем: скорость должна быть постоянной в
+      // Сжатие по Y не учитываем: скорость должна быть равномерной в
       // координатах мира, а не в экранных.
       const dx = this.path[i].x - this.path[i - 1].x;
       const dy = this.path[i].y - this.path[i - 1].y;
@@ -74,22 +75,37 @@ export class Gosha {
       this.lengths.push(len);
       this.total += len;
     }
+  }
 
-    this.stopAt = null;
-    this.retreatTo = 0;
-    if (stopAtIndex !== null && stopAtIndex > 0) {
-      let acc = 0;
-      for (let i = 0; i < Math.min(stopAtIndex, this.lengths.length); i++) {
-        acc += this.lengths[i];
-      }
-      this.stopAt = acc;
-      this.retreatTo = Math.max(0, acc - RETREAT);
+  /**
+   * Запускает проход к точке маршрута.
+   * @param {{x:number,y:number}[]} points маршрут
+   * @param {number} targetDist расстояние по маршруту до выбранного шкафа
+   * @param {boolean} pass пройдёт ли он дальше
+   * @param {() => void} onDone вызывается, когда сцена доиграна
+   */
+  start(points, targetDist, pass, onDone) {
+    this._measure(points);
+    if (this.total === 0) {
+      onDone?.();
+      return;
     }
 
-    this.dist = this.stopAt !== null ? this.retreatTo : 0;
-    this.dir = 1;
-    this.bumpUntil = 0;
-    this.visible = this.path.length > 1;
+    this.to = Math.max(0, Math.min(targetDist, this.total));
+    this.from = Math.max(0, this.to - RUN_UP);
+    this.dist = this.from;
+    this.pass = pass;
+    this.onDone = onDone;
+    this.phase = 'run';
+    this.startedAt = performance.now();
+    this.duration = RUN_MS;
+    this.visible = true;
+  }
+
+  stop() {
+    this.visible = false;
+    this.phase = null;
+    this.onDone = null;
   }
 
   _pointAt(dist) {
@@ -112,64 +128,72 @@ export class Gosha {
     return null;
   }
 
-  update(dtMs, now) {
-    if (!this.visible || this.total === 0) return;
-    if (now < this.bumpUntil) return;
+  update(now) {
+    if (!this.visible || !this.phase) return;
 
-    this.dist += (this.dir * SPEED * dtMs) / 1000;
+    const t = Math.min(1, (now - this.startedAt) / this.duration);
 
-    if (this.stopAt !== null && this.dir === 1 && this.dist >= this.stopAt) {
-      this.dist = this.stopAt;
-      this.bumpUntil = now + BUMP_MS;
-      this.dir = -1;
+    if (this.phase === 'run') {
+      const e = 1 - Math.pow(1 - t, 2); // тормозит у самого шкафа
+      this.dist = this.from + (this.to - this.from) * e;
+      if (t >= 1) {
+        if (this.pass) {
+          this.phase = 'through';
+          this.from = this.to;
+          this.to = Math.min(this.total, this.to + RUN_UP * 0.8);
+          this.duration = THROUGH_MS;
+        } else {
+          this.phase = 'bump';
+          this.duration = BUMP_MS;
+        }
+        this.startedAt = now;
+      }
       return;
     }
 
-    if (this.dist >= this.total) {
-      if (this.stopAt === null) {
-        this.dist = 0;
-      } else {
-        this.dist = this.total;
-        this.dir = -1;
-      }
+    if (this.phase === 'through') {
+      this.dist = this.from + (this.to - this.from) * t;
+      if (t >= 1) this._finish();
+      return;
     }
 
-    const floor = this.stopAt !== null ? this.retreatTo : 0;
-    if (this.dist <= floor) {
-      this.dist = floor;
-      this.dir = 1;
-    }
+    if (this.phase === 'bump' && t >= 1) this._finish();
+  }
+
+  _finish() {
+    this.phase = null;
+    const done = this.onDone;
+    this.onDone = null;
+    done?.();
   }
 
   draw(ctx, ox, oy, s, sy, now) {
-    if (!this.visible || !this.ready) return;
+    if (!this.visible || !this.ready || this.path.length < 2) return;
     const at = this._pointAt(this.dist);
     if (!at) return;
 
-    // Полная высота фигуры вместе с ногами. Вместе с рохлей сцена занимает
-    // примерно вдвое больше по ширине, поэтому верхнюю границу держим низкой.
-    const H = Math.max(30, Math.min(74, 3.6 * s));
+    const H = Math.max(34, Math.min(80, 3.6 * s));
     let px = ox + at.x * s;
     const py = oy + at.y * sy;
 
-    const bumping = now < this.bumpUntil;
+    const bumping = this.phase === 'bump';
     if (bumping) {
-      const k = (this.bumpUntil - now) / BUMP_MS;
-      px += Math.sin(now / 22) * 3 * k;
+      const k = 1 - (now - this.startedAt) / this.duration;
+      px += Math.sin(now / 20) * 4 * Math.max(0, k);
     }
 
-    // Фаза шага привязана к пройденному пути, а не ко времени: стоя на месте
-    // после удара Гоша не перебирает ногами.
-    const phase = (this.dist / STRIDE) * Math.PI * 2;
-    const goingLeft = at.dx * this.dir < 0;
+    // Фаза шага привязана к пройденному пути: стоя на месте после удара Гоша
+    // не перебирает ногами.
+    const stepPhase = (this.dist / STRIDE) * Math.PI * 2;
+    const goingLeft = at.dx < 0;
 
     ctx.save();
     ctx.translate(px, py);
     if (goingLeft) ctx.scale(-1, 1);
 
     this._drawPallet(ctx, H);
-    this._drawLegs(ctx, H, bumping ? 0 : phase);
-    this._drawBody(ctx, H, bumping ? 0 : phase);
+    this._drawLegs(ctx, H, stepPhase);
+    this._drawBody(ctx, H, stepPhase);
 
     ctx.restore();
 
@@ -178,15 +202,14 @@ export class Gosha {
 
   /** Рохля позади: вилы с колёсами, поддон с коробкой и наклонная рукоять. */
   _drawPallet(ctx, H) {
-    const back = -H * 0.44;   // ближний к Гоше край рохли
-    const tail = -H * 1.12;   // дальний край вил
+    const back = -H * 0.44;
+    const tail = -H * 1.12;
     const floorY = -H * 0.03;
 
     ctx.save();
     ctx.lineCap = 'round';
     ctx.lineJoin = 'round';
 
-    // Рукоять от руки Гоши к вилам.
     ctx.strokeStyle = COLORS.steelDark;
     ctx.lineWidth = Math.max(1.5, H * 0.035);
     ctx.beginPath();
@@ -194,7 +217,6 @@ export class Gosha {
     ctx.lineTo(back, floorY - H * 0.05);
     ctx.stroke();
 
-    // Груз на поддоне.
     const cw = Math.abs(tail - back) * 0.78;
     const cx = (back + tail) / 2;
     const ch = H * 0.3;
@@ -203,11 +225,9 @@ export class Gosha {
     ctx.fillStyle = COLORS.cargoTop;
     ctx.fillRect(cx - cw / 2, floorY - H * 0.1 - ch, cw, Math.max(1.5, ch * 0.16));
 
-    // Вилы.
     ctx.fillStyle = COLORS.steel;
     ctx.fillRect(tail, floorY - H * 0.1, back - tail, Math.max(1.5, H * 0.06));
 
-    // Колёса.
     ctx.fillStyle = COLORS.wheel;
     const r = Math.max(1.5, H * 0.045);
     for (const wx of [tail + r * 1.2, back - r * 1.2]) {
@@ -219,7 +239,7 @@ export class Gosha {
     ctx.restore();
   }
 
-  /** Две ноги в противофазе: простой шаг, читаемый даже на 30 пикселях. */
+  /** Две ноги в противофазе: простой шаг, читаемый даже на 34 пикселях. */
   _drawLegs(ctx, H, phase) {
     const legH = H * LEG_RATIO;
     const hipY = -legH;
@@ -232,14 +252,12 @@ export class Gosha {
     for (let i = 0; i < 2; i++) {
       const p = phase + i * Math.PI;
       const footX = Math.sin(p) * swing;
-      // Дальняя нога темнее — так видно, что их две.
       ctx.strokeStyle = i === 0 ? COLORS.legDark : COLORS.leg;
       ctx.beginPath();
       ctx.moveTo(0, hipY);
       ctx.lineTo(footX, 0);
       ctx.stroke();
 
-      // Ступня.
       ctx.beginPath();
       ctx.moveTo(footX - legH * 0.1, 0);
       ctx.lineTo(footX + legH * 0.42, 0);
@@ -253,7 +271,6 @@ export class Gosha {
     const legH = H * LEG_RATIO;
     const bodyH = H - legH;
     const bodyW = bodyH * BODY_ASPECT;
-    // Лёгкое покачивание в такт шагу.
     const bob = Math.abs(Math.sin(phase)) * H * 0.022;
 
     ctx.save();
@@ -265,8 +282,8 @@ export class Gosha {
   }
 
   _drawImpact(ctx, px, py, H, now) {
-    const k = (this.bumpUntil - now) / BUMP_MS;
-    const r = H * (0.3 + (1 - k) * 0.22);
+    const k = 1 - (now - this.startedAt) / this.duration;
+    const r = H * (0.3 + (1 - k) * 0.26);
     ctx.save();
     ctx.globalAlpha = Math.max(0, k);
     ctx.strokeStyle = COLORS.impact;
@@ -279,18 +296,86 @@ export class Gosha {
 }
 
 /**
- * Первая точка, где ожидаемый маршрут расходится с получившимся. Именно там
- * топология ломается, и именно туда упирается Гоша, пока ошибка не найдена.
- * Индексы решения захэшированы, так что сам проблемный шкаф отсюда не узнать —
- * а расхождение маршрутов видно из данных уровня.
+ * Путь Гоши до выбранного шкафа: маршрут, обрезанный по ближайшей к шкафу
+ * точке, плюс короткий подход вплотную. Без этого подхода он останавливался
+ * на маршруте в стороне от шкафа, и было непонятно, обо что он упёрся.
+ *
+ * @returns {{path: {x:number,y:number}[], targetDist: number}}
  */
-export function findDivergence(badPoints, goodPoints) {
-  if (!badPoints?.length || !goodPoints?.length) return null;
-  const n = Math.min(badPoints.length, goodPoints.length);
-  for (let i = 0; i < n; i++) {
-    const a = badPoints[i];
-    const b = goodPoints[i];
-    if (Math.hypot(a.x - b.x, a.y - b.y) > 1.5) return i;
+export function buildApproach(points, target) {
+  const d = distanceAlongRoute(points, target);
+
+  // Обрезаем маршрут по точке d.
+  const path = [];
+  let acc = 0;
+  let cut = null;
+  for (let i = 1; i < points.length; i++) {
+    const a = points[i - 1];
+    const b = points[i];
+    const seg = Math.hypot(b.x - a.x, b.y - a.y);
+    if (path.length === 0) path.push({ x: a.x, y: a.y });
+    if (acc + seg >= d) {
+      const t = seg > 0 ? (d - acc) / seg : 0;
+      cut = { x: a.x + (b.x - a.x) * t, y: a.y + (b.y - a.y) * t };
+      path.push(cut);
+      break;
+    }
+    path.push({ x: b.x, y: b.y });
+    acc += seg;
   }
-  return n > 1 ? n - 1 : null;
+
+  if (!cut) {
+    const last = points[points.length - 1];
+    cut = { x: last.x, y: last.y };
+    if (path.length === 0) path.push({ x: points[0].x, y: points[0].y });
+    path.push(cut);
+  }
+
+  // Короткий подход: встаём вплотную к шкафу, но не поверх него.
+  const dx = target.x - cut.x;
+  const dy = target.y - cut.y;
+  const gap = Math.hypot(dx, dy);
+  const STAND_OFF = 1.3;
+  if (gap > STAND_OFF + 0.4) {
+    const k = (gap - STAND_OFF) / gap;
+    path.push({ x: cut.x + dx * k, y: cut.y + dy * k });
+  }
+
+  let targetDist = 0;
+  for (let i = 1; i < path.length; i++) {
+    targetDist += Math.hypot(path[i].x - path[i - 1].x, path[i].y - path[i - 1].y);
+  }
+
+  return { path, targetDist };
+}
+
+/**
+ * Расстояние по маршруту до точки, ближайшей к заданной. Нужно, чтобы
+ * привести выбранный шкаф к позиции на ломаной маршрута.
+ */
+export function distanceAlongRoute(points, target) {
+  if (!points || points.length < 2) return 0;
+  let acc = 0;
+  let best = 0;
+  let bestD = Infinity;
+
+  for (let i = 1; i < points.length; i++) {
+    const a = points[i - 1];
+    const b = points[i];
+    const vx = b.x - a.x;
+    const vy = b.y - a.y;
+    const len2 = vx * vx + vy * vy;
+    const t = len2 > 0 ? Math.max(0, Math.min(1, ((target.x - a.x) * vx + (target.y - a.y) * vy) / len2)) : 0;
+    const cx = a.x + vx * t;
+    const cy = a.y + vy * t;
+    const d = Math.hypot(target.x - cx, target.y - cy);
+    const seg = Math.sqrt(len2);
+    if (d < bestD) {
+      bestD = d;
+      best = acc + seg * t;
+    }
+    acc += seg;
+  }
+
+  return best;
 }

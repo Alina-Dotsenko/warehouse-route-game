@@ -181,19 +181,17 @@ function renderGameScreen() {
   btnQuit.addEventListener('click', () => renderStartScreen());
 
   btnVerify.addEventListener('click', async () => {
-    const isCorrect = await checkSolution(level, map.getSelection());
+    const selection = map.getSelection();
+    const isCorrect = await checkSolution(level, selection);
 
-    if (isCorrect) {
-      // Ошибка найдена — шкаф считается исправленным: показываем желаемый
-      // маршрут и даём Гоше пройти там, где он раньше упирался.
-      setRoute('good');
-      map.setSolved(true);
-      setTimeout(() => showResult(modal, level, true), 1400);
-    } else {
-      // Пусть будет видно, обо что именно он спотыкается.
-      setRoute('good');
-      showResult(modal, level, false);
-    }
+    // Сначала показываем, что происходит на складе, и только потом вердикт:
+    // Гоша подходит к выбранному шкафу и либо проходит, либо упирается в него.
+    btnVerify.disabled = true;
+    setRoute('good');
+    await map.playCheck(selection[0], isCorrect);
+    btnVerify.disabled = false;
+
+    showResult(modal, level, isCorrect);
   });
 
   updateSelectionUI(new Set());

@@ -14,7 +14,7 @@
  *   При таком сжатии шкаф 0.84 x 1.68 выглядит квадратом — как и задумано.
  */
 
-import { Gosha, findDivergence } from './gosha.js';
+import { Gosha, buildApproach } from './gosha.js';
 
 const Y_SQUEEZE = 1;
 
@@ -306,10 +306,7 @@ export class TopologyMap {
     this.grid = new SpatialGrid(this.cabinets);
 
     this.selected = new Set();
-    // Пока ошибка не найдена, Гоша упирается там, где ожидаемый маршрут
-    // расходится с получившимся.
-    this.solved = false;
-    this._syncGosha();
+    this.gosha.stop();
 
     this.resize();
     this.fit();
@@ -318,24 +315,30 @@ export class TopologyMap {
 
   setActiveRoute(kind) {
     this.activeRoute = kind;
-    this._syncGosha();
     this.requestDraw();
   }
 
-  /** После верного ответа шкаф считается исправленным и Гоша проходит. */
-  setSolved(solved) {
-    this.solved = solved;
-    this._syncGosha();
-    this.requestDraw();
-  }
+  /**
+   * Сцена проверки: камера наводится на выбранный шкаф, Гоша подходит к нему
+   * по маршруту и либо идёт дальше, либо упирается.
+   * @param {number} cabIndex выбранный шкаф
+   * @param {boolean} pass пройдёт ли он
+   * @returns {Promise<void>} завершается, когда сцена доиграна
+   */
+  playCheck(cabIndex, pass) {
+    const cab = this.cabinets[cabIndex];
+    const pts = this.routes.good.length > 1 ? this.routes.good : this.routes.bad;
+    if (!cab || pts.length < 2) return Promise.resolve();
 
-  _syncGosha() {
-    const pts = this.routes[this.activeRoute];
-    // Упор имеет смысл только на желаемом маршруте: получившийся — это то,
-    // что система действительно построила, по нему Гоша проходит целиком.
-    const blocked = !this.solved && this.activeRoute === 'good';
-    const stop = blocked ? findDivergence(this.routes.bad, this.routes.good) : null;
-    this.gosha.setPath(pts, stop);
+    const target = { x: cab.x + cab.w / 2, y: cab.y + cab.h / 2 };
+    this.focusOn({ x: target.x - 9, y: target.y - 9, w: 18, h: 18 }, 1.1);
+
+    const { path, targetDist } = buildApproach(pts, target);
+
+    return new Promise((resolve) => {
+      this.gosha.start(path, targetDist, pass, resolve);
+      this.startAnimation();
+    });
   }
 
   setHintZoneVisible(visible) {
@@ -658,10 +661,8 @@ export class TopologyMap {
     const tick = () => {
       if (!this._animating || this._destroyed) return;
       const now = performance.now();
-      const dt = Math.min(now - this._lastTick, 50); // после сворачивания вкладки
-      this._lastTick = now;
       this._dashPhase -= 0.35;
-      this.gosha.update(dt, now);
+      this.gosha.update(now);
       this.draw();
       this._raf = requestAnimationFrame(tick);
     };
