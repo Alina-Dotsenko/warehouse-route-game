@@ -2,18 +2,17 @@
  * Гоша-дежурный: подходит к выбранному шкафу и либо проходит дальше, либо
  * упирается в него.
  *
- * Спрайт взят из «Гоша Patch-goose» (соседний проект `games`, `gosha-dev.png`
- * — тот, что в наушниках и с бейджем, как раз дежурный). У исходника лапы
- * нарисованы статично, поэтому тело обрезано выше лап, развёрнуто вправо и
- * уменьшено до 128 пикселей, а ноги и рохля рисуются на канвасе — иначе шаг
- * не анимировать.
+ * Корпус перерисован по Гоше из соседней Pac-Man игры: тот же объёмный стиль,
+ * но без гарнитуры и бейджа, в рабочем комбинезоне и сигнальном жилете.
+ * Ноги и рохля остаются отдельными Canvas-слоями, чтобы шаг и колёса можно
+ * было анимировать независимо от растрового корпуса.
  *
  * Гоша живёт только во время проверки решения. Постоянно шагающая по всему
  * маршруту фигура на общем плане занимала тридцать пикселей и терялась, а
  * дойти до нужного места ей требовалось секунд двадцать.
  */
 
-import bodyUrl from './assets/gosha/gosha-body.png';
+import bodyUrl from './assets/gosha/gosha-worker-body.png';
 
 // Подход к шкафу — буквально несколько шагов: камера уже наведена, длинный
 // разбег только тянул бы время.
@@ -29,17 +28,29 @@ const SAY = {
   block: 'Тут не пройти',
 };
 
-const LEG_RATIO = 0.17;
-const BODY_ASPECT = 78 / 128;
+const LEG_RATIO = 0.22;
+const BODY_ASPECT = 1122 / 1402;
 
 const COLORS = {
   leg: '#fec700',
-  legDark: '#d9a300',
+  legShade: '#e7a800',
+  pants: '#17355d',
+  pantsLight: '#254d7d',
+  pantsEdge: '#0d2340',
+  jack: '#f5a524',
+  jackLight: '#ffc247',
+  jackDark: '#b96512',
   steel: '#94a6c4',
-  steelDark: '#5d6f8f',
-  wheel: '#2b3648',
-  cargo: '#c98b4b',
-  cargoTop: '#e0a869',
+  steelDark: '#34445d',
+  wheel: '#202a38',
+  wheelSide: '#56647a',
+  wheelHub: '#dce5ef',
+  pallet: '#9b6235',
+  palletTop: '#d39a5d',
+  palletEdge: '#6f4328',
+  cargo: '#3478d4',
+  cargoLight: '#72a8ee',
+  cargoDark: '#1e4f96',
   impact: '#ff2d92',
 };
 
@@ -213,17 +224,19 @@ export class Gosha {
       px += Math.sin(now / 20) * 4 * Math.max(0, k);
     }
 
-    // Фаза шага привязана к пройденному пути: стоя на месте после удара Гоша
-    // не перебирает ногами.
-    const standing = this.phase === 'idle';
+    // Фаза шага и оборот колёс привязаны к пройденному пути. При остановке у
+    // шкафа ни ноги, ни рохля не продолжают жить своей жизнью.
+    const walking = this.phase === 'run' || this.phase === 'through';
+    const standing = !walking;
     const stepPhase = (this.dist / STRIDE) * Math.PI * 2;
+    const wheelPhase = this.dist * 3.4;
     const goingLeft = at.dx < 0;
 
     ctx.save();
     ctx.translate(px, py);
     if (goingLeft) ctx.scale(-1, 1);
 
-    this._drawPallet(ctx, H);
+    this._drawPallet(ctx, H, wheelPhase);
     this._drawLegs(ctx, H, stepPhase, standing);
     // Стоя Гоша чуть покачивается — иначе выглядит забытой на карте меткой.
     this._drawBody(ctx, H, standing ? now / 900 : stepPhase);

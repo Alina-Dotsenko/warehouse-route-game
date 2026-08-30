@@ -1,3 +1,5 @@
+import { icon } from './icons.js';
+
 /**
  * HTML-шаблоны экранов. Держим их отдельно от логики, чтобы разметка не была
  * размазана по обработчикам, и чтобы визуальные правки не требовали трогать
@@ -142,12 +144,12 @@ export function gameScreen({ level, levelIndex, levelCount }) {
               <span class="dot dot-good"></span><span class="seg-label">Как надо</span>
             </button>
           </div>
-          <button class="icon-btn" id="btn-hint" title="Подсказка" aria-label="Подсказка"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 18h6M10 22h4"/><path d="M12 2a7 7 0 0 0-4 12.7V17h8v-2.3A7 7 0 0 0 12 2Z"/></svg></button>
-          <button class="icon-btn" id="btn-clear-selection" title="Сбросить выбор" aria-label="Сбросить выбор" disabled>↺</button>
-          <button class="icon-btn btn-sound" id="btn-sound" aria-pressed="false"><svg class="icon icon-sound-on" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M11 5 6 9H3v6h3l5 4V5Z"/><path d="M15.5 8.5a5 5 0 0 1 0 7"/><path d="M18.5 5.5a9 9 0 0 1 0 13"/></svg><svg class="icon icon-sound-off" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M11 5 6 9H3v6h3l5 4V5Z"/><path d="m16 9 5 6M21 9l-5 6"/></svg></button>
+          <button class="icon-btn" id="btn-hint" title="Подсказка" aria-label="Подсказка">${icon('bulb')}</button>
+          <button class="icon-btn" id="btn-clear-selection" title="Сбросить выбор" aria-label="Сбросить выбор" disabled>${icon('reset')}</button>
+          <button class="icon-btn btn-sound" id="btn-sound" aria-pressed="false">${icon('soundOn', 'icon-sound-on')}${icon('soundOff', 'icon-sound-off')}</button>
         </div>
 
-        <button class="icon-btn btn-quit" id="btn-quit" title="Выйти в меню" aria-label="Выйти в меню">✕</button>
+        <button class="icon-btn btn-quit" id="btn-quit" title="Выйти в меню" aria-label="Выйти в меню">${icon('close')}</button>
       </header>
 
       <div class="game-body">
@@ -155,9 +157,9 @@ export function gameScreen({ level, levelIndex, levelCount }) {
           <canvas class="map-canvas" id="map-canvas"></canvas>
 
           <div class="map-controls">
-            <button class="icon-btn map-ctl" id="btn-zoom-in" title="Приблизить" aria-label="Приблизить">+</button>
-            <button class="icon-btn map-ctl" id="btn-zoom-out" title="Отдалить" aria-label="Отдалить">−</button>
-            <button class="icon-btn map-ctl" id="btn-zoom-fit" title="Показать весь склад" aria-label="Показать весь склад">⤢</button>
+            <button class="icon-btn map-ctl" id="btn-zoom-in" title="Приблизить" aria-label="Приблизить">${icon('plus')}</button>
+            <button class="icon-btn map-ctl" id="btn-zoom-out" title="Отдалить" aria-label="Отдалить">${icon('minus')}</button>
+            <button class="icon-btn map-ctl" id="btn-zoom-fit" title="Показать весь склад" aria-label="Показать весь склад">${icon('fit')}</button>
           </div>
 
           <div class="map-action">
@@ -179,7 +181,7 @@ export function gameScreen({ level, levelIndex, levelCount }) {
           <p class="complaint-body">${escapeHtml(level.complaint)}</p>
 
           <div class="hint-box" id="hint-box" hidden>
-            <svg class="icon hint-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 18h6M10 22h4"/><path d="M12 2a7 7 0 0 0-4 12.7V17h8v-2.3A7 7 0 0 0 12 2Z"/></svg>
+            ${icon('bulb', 'hint-icon')}
             <p>${escapeHtml(level.hintText)}</p>
           </div>
 

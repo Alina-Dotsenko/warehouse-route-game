@@ -294,6 +294,7 @@ summary::-webkit-details-marker {
 }
 
 .icon {
+  display: block;
   width: 18px;
   height: 18px;
   flex-shrink: 0;
@@ -612,8 +613,6 @@ summary::-webkit-details-marker {
   border-radius: var(--r-md);
   background: var(--surface-2);
   border: 1px solid var(--line);
-  font: inherit;
-  font-size: 1.05rem;
   color: var(--text);
   cursor: pointer;
   transition: background 0.15s, color 0.15s, opacity 0.15s;
@@ -753,11 +752,17 @@ summary::-webkit-details-marker {
   width: var(--tap);
   height: var(--tap);
   min-width: var(--tap);
+  display: grid;
+  place-items: center;
   border: none;
   border-radius: 0;
   background: var(--surface);
-  font-size: 1.25rem;
-  font-weight: 600;
+}
+
+/* Кнопки на карте крупнее, иконка в них тоже. */
+.map-ctl .icon {
+  width: 20px;
+  height: 20px;
 }
 
 .map-ctl:hover:not(:disabled) {
