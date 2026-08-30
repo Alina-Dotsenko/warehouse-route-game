@@ -1,23 +1,14 @@
 /**
- * Гоша, шагающий по маршруту.
+ * Гоша-дежурный, идущий по маршруту с рохлей.
  *
- * Спрайты взяты из «Гоша Patch-goose» (соседний проект `games`): те же кадры
- * с открытым и закрытым клювом, что и у игрока в аркаде. Здесь они уменьшены
- * до 96 пикселей — на карте Гоша занимает 24–48 CSS-пикселей, больше не нужно.
+ * Спрайт взят из «Гоша Patch-goose» (соседний проект `games`, `gosha-dev.png`
+ * — тот, что в наушниках и с бейджем, как раз дежурный). У исходника лапы
+ * нарисованы статично, поэтому тело обрезано выше лап, развёрнуто вправо и
+ * уменьшено до 128 пикселей, а ноги и рохля рисуются на канвасе — иначе шаг
+ * не анимировать.
  */
 
-import openUrl from './assets/gosha/gosha-open.png';
-import halfUrl from './assets/gosha/gosha-half.png';
-import closedUrl from './assets/gosha/gosha-closed.png';
-import blinkUrl from './assets/gosha/gosha-blink.png';
-
-// Порядок кадров: клюв открывается и закрывается, изредка моргание.
-const FRAME_URLS = [openUrl, halfUrl, closedUrl, halfUrl];
-const BLINK_URL = blinkUrl;
-
-const FRAME_MS = 110; // смена кадра клюва
-const BLINK_EVERY_MS = 3400;
-const BLINK_MS = 160;
+import bodyUrl from './assets/gosha/gosha-body.png';
 
 /** Скорость в единицах мира за секунду: маршрут целиком — примерно за 20 с. */
 const SPEED = 14;
@@ -29,46 +20,55 @@ const SPEED = 14;
  */
 const RETREAT = 24;
 
-const BUMP_MS = 900; // отскок при упоре в шкаф
+const BUMP_MS = 900;
+
+// Длина шага в единицах мира — от неё считается фаза ног.
+const STRIDE = 3.2;
+
+const LEG_RATIO = 0.17;   // доля ног в полной высоте
+const BODY_ASPECT = 78 / 128;
+
+const COLORS = {
+  leg: '#fec700',
+  legDark: '#d9a300',
+  steel: '#94a6c4',
+  steelDark: '#5d6f8f',
+  wheel: '#2b3648',
+  cargo: '#c98b4b',
+  cargoTop: '#e0a869',
+  impact: '#ff2d92',
+};
 
 export class Gosha {
   constructor() {
-    this.images = FRAME_URLS.map((src) => {
-      const img = new Image();
-      img.src = src;
-      return img;
-    });
-    this.blinkImage = new Image();
-    this.blinkImage.src = BLINK_URL;
+    this.body = new Image();
+    this.body.src = bodyUrl;
 
-    this.path = [];       // точки маршрута в координатах мира
-    this.lengths = [];    // длина каждого отрезка
+    this.path = [];
+    this.lengths = [];
     this.total = 0;
 
-    this.dist = 0;        // пройдено по маршруту
-    this.dir = 1;         // 1 — вперёд, -1 — назад после отскока
-    this.stopAt = null;   // расстояние, дальше которого не пускает шкаф
-    this.bumpUntil = 0;   // время окончания отскока
+    this.dist = 0;
+    this.dir = 1;
+    this.stopAt = null;
+    this.retreatTo = 0;
+    this.bumpUntil = 0;
     this.visible = false;
   }
 
   get ready() {
-    return this.images.every((i) => i.complete && i.naturalWidth > 0);
+    return this.body.complete && this.body.naturalWidth > 0;
   }
 
-  /**
-   * @param {{x:number,y:number}[]} points точки маршрута
-   * @param {number|null} stopAtIndex индекс точки, дальше которой пути нет
-   */
   setPath(points, stopAtIndex = null) {
     this.path = points || [];
     this.lengths = [];
     this.total = 0;
 
     for (let i = 1; i < this.path.length; i++) {
+      // Сжатие по Y здесь не учитываем: скорость должна быть постоянной в
+      // координатах мира, а не в экранных.
       const dx = this.path[i].x - this.path[i - 1].x;
-      // Сжатие по Y здесь не учитываем: Гоша должен идти с постоянной
-      // скоростью в координатах мира, а не в экранных.
       const dy = this.path[i].y - this.path[i - 1].y;
       const len = Math.hypot(dx, dy);
       this.lengths.push(len);
@@ -86,14 +86,12 @@ export class Gosha {
       this.retreatTo = Math.max(0, acc - RETREAT);
     }
 
-    // Если путь перекрыт — сразу подходим к преграде, а не идём к ней с начала.
     this.dist = this.stopAt !== null ? this.retreatTo : 0;
     this.dir = 1;
     this.bumpUntil = 0;
     this.visible = this.path.length > 1;
   }
 
-  /** Позиция и направление на маршруте по пройденному расстоянию. */
   _pointAt(dist) {
     if (this.path.length < 2) return null;
     let d = Math.max(0, Math.min(dist, this.total));
@@ -114,18 +112,12 @@ export class Gosha {
     return null;
   }
 
-  /**
-   * @param {number} dtMs прошло времени
-   * @param {number} now текущее время
-   */
   update(dtMs, now) {
     if (!this.visible || this.total === 0) return;
-
-    if (now < this.bumpUntil) return; // стоит и трясётся после удара
+    if (now < this.bumpUntil) return;
 
     this.dist += (this.dir * SPEED * dtMs) / 1000;
 
-    // Упёрся в шкаф: отскакивает и идёт обратно.
     if (this.stopAt !== null && this.dir === 1 && this.dist >= this.stopAt) {
       this.dist = this.stopAt;
       this.bumpUntil = now + BUMP_MS;
@@ -135,7 +127,7 @@ export class Gosha {
 
     if (this.dist >= this.total) {
       if (this.stopAt === null) {
-        this.dist = 0; // прошёл насквозь — идём заново
+        this.dist = 0;
       } else {
         this.dist = this.total;
         this.dir = -1;
@@ -149,58 +141,135 @@ export class Gosha {
     }
   }
 
-  /**
-   * @param {CanvasRenderingContext2D} ctx
-   * @param {number} ox @param {number} oy сдвиг холста
-   * @param {number} s масштаб по X @param {number} sy масштаб по Y
-   * @param {number} now текущее время
-   */
   draw(ctx, ox, oy, s, sy, now) {
     if (!this.visible || !this.ready) return;
     const at = this._pointAt(this.dist);
     if (!at) return;
 
-    // Размер держим в разумных пределах: на общем плане Гоша не должен
-    // превращаться в точку, на крупном — заслонять пол-экрана.
-    const size = Math.max(22, Math.min(64, 3.2 * s));
+    // Полная высота фигуры вместе с ногами. Вместе с рохлей сцена занимает
+    // примерно вдвое больше по ширине, поэтому верхнюю границу держим низкой.
+    const H = Math.max(30, Math.min(74, 3.6 * s));
     let px = ox + at.x * s;
-    let py = oy + at.y * sy;
+    const py = oy + at.y * sy;
 
     const bumping = now < this.bumpUntil;
     if (bumping) {
-      // Дрожание в момент удара.
       const k = (this.bumpUntil - now) / BUMP_MS;
       px += Math.sin(now / 22) * 3 * k;
     }
 
-    const blinking = now % BLINK_EVERY_MS < BLINK_MS;
-    const frame = blinking
-      ? this.blinkImage
-      : this.images[Math.floor(now / FRAME_MS) % this.images.length];
-
-    // Спрайт нарисован смотрящим вправо — при движении влево отражаем.
+    // Фаза шага привязана к пройденному пути, а не ко времени: стоя на месте
+    // после удара Гоша не перебирает ногами.
+    const phase = (this.dist / STRIDE) * Math.PI * 2;
     const goingLeft = at.dx * this.dir < 0;
 
     ctx.save();
     ctx.translate(px, py);
     if (goingLeft) ctx.scale(-1, 1);
 
-    ctx.shadowColor = 'rgba(0,0,0,0.55)';
-    ctx.shadowBlur = size * 0.25;
-    ctx.shadowOffsetY = size * 0.12;
-    ctx.drawImage(frame, -size / 2, -size / 2, size, size);
+    this._drawPallet(ctx, H);
+    this._drawLegs(ctx, H, bumping ? 0 : phase);
+    this._drawBody(ctx, H, bumping ? 0 : phase);
+
     ctx.restore();
 
-    if (bumping) this._drawImpact(ctx, px, py, size, now);
+    if (bumping) this._drawImpact(ctx, px, py - H * 0.45, H, now);
   }
 
-  /** Вспышка в точке удара — чтобы было видно, обо что именно он упёрся. */
-  _drawImpact(ctx, px, py, size, now) {
+  /** Рохля позади: вилы с колёсами, поддон с коробкой и наклонная рукоять. */
+  _drawPallet(ctx, H) {
+    const back = -H * 0.44;   // ближний к Гоше край рохли
+    const tail = -H * 1.12;   // дальний край вил
+    const floorY = -H * 0.03;
+
+    ctx.save();
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+
+    // Рукоять от руки Гоши к вилам.
+    ctx.strokeStyle = COLORS.steelDark;
+    ctx.lineWidth = Math.max(1.5, H * 0.035);
+    ctx.beginPath();
+    ctx.moveTo(-H * 0.16, -H * 0.5);
+    ctx.lineTo(back, floorY - H * 0.05);
+    ctx.stroke();
+
+    // Груз на поддоне.
+    const cw = Math.abs(tail - back) * 0.78;
+    const cx = (back + tail) / 2;
+    const ch = H * 0.3;
+    ctx.fillStyle = COLORS.cargo;
+    ctx.fillRect(cx - cw / 2, floorY - H * 0.1 - ch, cw, ch);
+    ctx.fillStyle = COLORS.cargoTop;
+    ctx.fillRect(cx - cw / 2, floorY - H * 0.1 - ch, cw, Math.max(1.5, ch * 0.16));
+
+    // Вилы.
+    ctx.fillStyle = COLORS.steel;
+    ctx.fillRect(tail, floorY - H * 0.1, back - tail, Math.max(1.5, H * 0.06));
+
+    // Колёса.
+    ctx.fillStyle = COLORS.wheel;
+    const r = Math.max(1.5, H * 0.045);
+    for (const wx of [tail + r * 1.2, back - r * 1.2]) {
+      ctx.beginPath();
+      ctx.arc(wx, floorY, r, 0, Math.PI * 2);
+      ctx.fill();
+    }
+
+    ctx.restore();
+  }
+
+  /** Две ноги в противофазе: простой шаг, читаемый даже на 30 пикселях. */
+  _drawLegs(ctx, H, phase) {
+    const legH = H * LEG_RATIO;
+    const hipY = -legH;
+    const swing = legH * 0.55;
+
+    ctx.save();
+    ctx.lineCap = 'round';
+    ctx.lineWidth = Math.max(1.8, H * 0.05);
+
+    for (let i = 0; i < 2; i++) {
+      const p = phase + i * Math.PI;
+      const footX = Math.sin(p) * swing;
+      // Дальняя нога темнее — так видно, что их две.
+      ctx.strokeStyle = i === 0 ? COLORS.legDark : COLORS.leg;
+      ctx.beginPath();
+      ctx.moveTo(0, hipY);
+      ctx.lineTo(footX, 0);
+      ctx.stroke();
+
+      // Ступня.
+      ctx.beginPath();
+      ctx.moveTo(footX - legH * 0.1, 0);
+      ctx.lineTo(footX + legH * 0.42, 0);
+      ctx.stroke();
+    }
+
+    ctx.restore();
+  }
+
+  _drawBody(ctx, H, phase) {
+    const legH = H * LEG_RATIO;
+    const bodyH = H - legH;
+    const bodyW = bodyH * BODY_ASPECT;
+    // Лёгкое покачивание в такт шагу.
+    const bob = Math.abs(Math.sin(phase)) * H * 0.022;
+
+    ctx.save();
+    ctx.shadowColor = 'rgba(0,0,0,0.5)';
+    ctx.shadowBlur = H * 0.18;
+    ctx.shadowOffsetY = H * 0.05;
+    ctx.drawImage(this.body, -bodyW / 2, -legH - bodyH + bob, bodyW, bodyH);
+    ctx.restore();
+  }
+
+  _drawImpact(ctx, px, py, H, now) {
     const k = (this.bumpUntil - now) / BUMP_MS;
-    const r = size * (0.45 + (1 - k) * 0.35);
+    const r = H * (0.3 + (1 - k) * 0.22);
     ctx.save();
     ctx.globalAlpha = Math.max(0, k);
-    ctx.strokeStyle = '#ff2d92';
+    ctx.strokeStyle = COLORS.impact;
     ctx.lineWidth = 3;
     ctx.beginPath();
     ctx.arc(px, py, r, 0, Math.PI * 2);
