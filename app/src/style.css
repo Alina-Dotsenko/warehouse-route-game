@@ -1252,6 +1252,27 @@ summary::-webkit-details-marker {
   display: block;
 }
 
+.goal-badge {
+  flex-shrink: 0;
+  padding: 3px var(--sp-2);
+  border-radius: var(--r-sm);
+  background: var(--brand-soft);
+  color: var(--brand-bright);
+  font-size: 0.6875rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+/* Задача — главное, что игрок должен прочитать, поэтому она первой и
+   обычным начертанием; жалоба ниже, курсивом, как реплика человека. */
+.goal-body {
+  font-size: 0.9375rem;
+  line-height: 1.55;
+  color: var(--text);
+  margin-bottom: var(--sp-3);
+}
+
 .complaint-badge {
   flex-shrink: 0;
   padding: 3px var(--sp-2);
@@ -1265,11 +1286,17 @@ summary::-webkit-details-marker {
 }
 
 .complaint-body {
-  font-size: 0.9375rem;
+  font-size: 0.875rem;
   line-height: 1.55;
-  color: var(--text);
+  color: var(--text-dim);
   font-style: italic;
   margin-bottom: var(--sp-4);
+}
+
+.complaint-body .complaint-badge {
+  margin-right: var(--sp-2);
+  font-style: normal;
+  vertical-align: 1px;
 }
 
 [hidden] {

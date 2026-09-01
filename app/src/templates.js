@@ -262,12 +262,14 @@ export function gameScreen({ level, levelIndex, levelCount }) {
           <span class="handle-grip" aria-hidden="true"></span>
           <span class="sheet-peek">
             <span class="complaint-badge">Задача</span>
-            <span class="sheet-peek-text">${escapeHtml(level.complaint)}</span>
+            <span class="sheet-peek-text">${escapeHtml(level.goal)}</span>
           </span>
           <span class="chevron" aria-hidden="true"></span>
         </button>
 
         <div class="sheet-body" id="sheet-body">
+          <p class="goal-body">${escapeHtml(level.goal)}</p>
+
           <div class="complaint-heading">
             <span class="complaint-kicker">Сообщение администратора</span>
             <strong>Что случилось на складе</strong>
