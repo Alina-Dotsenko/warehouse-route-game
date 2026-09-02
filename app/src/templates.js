@@ -221,39 +221,43 @@ export function gameScreen({ level, levelIndex, levelCount }) {
 
       <div class="game-body">
         <div class="map-stage" id="map-stage">
-          <canvas
-            class="map-canvas"
-            id="map-canvas"
-            tabindex="0"
-            aria-label="Карта склада. Перетаскивайте карту, масштабируйте и выбирайте шкафы."
-          ></canvas>
-
-          <div class="map-tip" aria-hidden="true">
-            <span class="map-tip-pulse"></span>
-            <span>Нажмите на шкаф, чтобы отметить его</span>
+          <div class="map-viewport">
+            <canvas
+              class="map-canvas"
+              id="map-canvas"
+              tabindex="0"
+              aria-label="Карта склада. Перетаскивайте карту, масштабируйте и выбирайте шкафы."
+            ></canvas>
           </div>
 
-          <button
-            class="map-navigator"
-            id="map-navigator"
-            type="button"
-            aria-label="Вернуться к обзору всего склада"
-          >
-            <canvas class="map-navigator-canvas" id="map-navigator-canvas" width="216" height="144" aria-hidden="true"></canvas>
-            <span class="map-navigator-caption">
-              <b>Весь склад</b>
-              <span id="map-zoom-value">100%</span>
-            </span>
-          </button>
+          <div class="map-toolbar" aria-label="Управление картой">
+            <div class="map-tip" aria-hidden="true">
+              <span class="map-tip-pulse"></span>
+              <span>Нажмите на шкаф, чтобы отметить его</span>
+            </div>
 
-          <div class="map-controls">
-            <button class="icon-btn map-ctl" id="btn-zoom-in" title="Приблизить" aria-label="Приблизить">${icon('plus')}</button>
-            <button class="icon-btn map-ctl" id="btn-zoom-out" title="Отдалить" aria-label="Отдалить">${icon('minus')}</button>
-            <button class="icon-btn map-ctl" id="btn-zoom-fit" title="Показать весь склад" aria-label="Показать весь склад">${icon('fit')}</button>
-          </div>
+            <button
+              class="map-navigator"
+              id="map-navigator"
+              type="button"
+              aria-label="Вернуться к обзору всего склада"
+            >
+              <canvas class="map-navigator-canvas" id="map-navigator-canvas" width="216" height="144" aria-hidden="true"></canvas>
+              <span class="map-navigator-caption">
+                <b>Весь склад</b>
+                <span id="map-zoom-value">100%</span>
+              </span>
+            </button>
 
-          <div class="map-action">
-            <button class="btn btn-primary btn-verify" id="btn-verify" disabled>Проверить решение</button>
+            <div class="map-controls">
+              <button class="icon-btn map-ctl" id="btn-zoom-in" title="Приблизить" aria-label="Приблизить">${icon('plus')}</button>
+              <button class="icon-btn map-ctl" id="btn-zoom-out" title="Отдалить" aria-label="Отдалить">${icon('minus')}</button>
+              <button class="icon-btn map-ctl" id="btn-zoom-fit" title="Показать весь склад" aria-label="Показать весь склад">${icon('fit')}</button>
+            </div>
+
+            <div class="map-action">
+              <button class="btn btn-primary btn-verify" id="btn-verify" disabled>Проверить решение</button>
+            </div>
           </div>
         </div>
 

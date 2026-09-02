@@ -2724,3 +2724,237 @@ summary::-webkit-details-marker {
     font-size: 0.69rem;
   }
 }
+
+/* ==========================================================================
+   Карта без перекрытий
+
+   Интерактивные элементы больше не лежат поверх canvas. Навигатор, масштаб и
+   проверка находятся в отдельной панели под картой, а на широком экране
+   задание занимает собственную колонку справа.
+   ========================================================================== */
+
+.map-stage {
+  display: flex;
+  flex-direction: column;
+}
+
+.map-viewport {
+  position: relative;
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: hidden;
+  background: #040914;
+}
+
+.map-toolbar {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 66px;
+  padding: 8px 12px calc(8px + var(--safe-b));
+  border-top: 1px solid rgba(137, 168, 214, 0.17);
+  background: linear-gradient(180deg, rgba(15, 26, 44, 0.99), rgba(9, 16, 28, 0.995));
+  box-shadow: 0 -8px 24px rgba(0, 0, 0, 0.2);
+}
+
+.map-tip {
+  position: static;
+  z-index: auto;
+  flex: 1 1 240px;
+  max-width: none;
+  min-height: 42px;
+  opacity: 1;
+  transform: none;
+}
+
+.map-tip.is-hidden,
+.map-tip.is-viewing {
+  display: none;
+}
+
+.map-navigator {
+  position: static;
+  z-index: auto;
+  display: none;
+  align-items: center;
+  gap: 8px;
+  width: auto;
+  min-width: 142px;
+  padding: 4px 8px;
+  opacity: 1;
+  pointer-events: auto;
+  transform: none;
+  transform-origin: center;
+}
+
+.map-navigator.is-visible {
+  display: flex;
+  transform: none;
+}
+
+.map-navigator-canvas {
+  width: 72px;
+  height: 44px;
+  aspect-ratio: auto;
+}
+
+.map-navigator-caption {
+  flex: 1;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 5px;
+  padding: 0;
+}
+
+.map-controls {
+  position: static;
+  z-index: auto;
+  flex: 0 0 auto;
+  flex-direction: row;
+}
+
+.map-action {
+  position: static;
+  z-index: auto;
+  flex: 0 1 260px;
+  max-width: none;
+  margin-left: auto;
+  transform: none;
+}
+
+.btn-verify {
+  width: 100%;
+  min-width: 190px;
+}
+
+@media (min-width: 900px) {
+  .game-body {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(300px, 360px);
+    grid-template-rows: minmax(0, 1fr);
+    gap: 12px;
+    padding: 12px;
+    background: #030812;
+  }
+
+  .map-stage {
+    min-width: 0;
+    border: 1px solid rgba(137, 168, 214, 0.16);
+    border-radius: 18px;
+  }
+
+  .sheet {
+    position: relative;
+    inset: auto;
+    align-self: end;
+    width: 100%;
+    max-height: 100%;
+  }
+
+  .sheet-body {
+    max-height: calc(100vh - 180px);
+  }
+
+  .map-controls,
+  .map-action {
+    position: static;
+    inset: auto;
+  }
+}
+
+@media (max-width: 899px) {
+  .game-body {
+    padding-bottom: 0;
+  }
+
+  .sheet {
+    position: static;
+    inset: auto;
+    flex: 0 0 auto;
+    max-height: min(44vh, 360px);
+  }
+
+  .sheet-body {
+    max-height: calc(min(44vh, 360px) - var(--sheet-h));
+  }
+}
+
+@media (max-width: 600px) {
+  .map-toolbar {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
+    gap: 8px;
+    min-height: 0;
+    padding: 8px 10px calc(8px + var(--safe-b));
+  }
+
+  .map-tip,
+  .map-navigator {
+    grid-column: 1 / -1;
+  }
+
+  .map-navigator {
+    width: 100%;
+    min-width: 0;
+  }
+
+  .map-controls {
+    grid-column: 1;
+  }
+
+  .map-action {
+    grid-column: 2;
+    min-width: 0;
+    margin-left: 0;
+  }
+
+  .btn-verify {
+    min-width: 0;
+    min-height: 40px;
+    padding-inline: 12px;
+  }
+}
+
+@media (max-height: 480px) and (orientation: landscape) {
+  .map-toolbar {
+    display: flex;
+    flex-wrap: nowrap;
+    gap: 6px;
+    padding: 4px 8px;
+  }
+
+  .map-tip {
+    display: none;
+  }
+
+  .map-navigator {
+    width: auto;
+    min-width: 0;
+  }
+
+  .map-navigator-canvas {
+    display: none;
+  }
+
+  .map-navigator-caption {
+    min-width: 58px;
+  }
+
+  .map-action {
+    flex: 1 1 auto;
+    margin-left: 0;
+  }
+
+  .btn-verify {
+    min-height: 38px;
+  }
+
+  .sheet {
+    max-height: 116px;
+  }
+
+  .sheet-body {
+    max-height: calc(116px - var(--sheet-h));
+  }
+}
